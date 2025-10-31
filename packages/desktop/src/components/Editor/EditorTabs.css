@@ -1,0 +1,90 @@
+.editor-tabs {
+  display: flex;
+  background: #252526;
+  border-bottom: 1px solid #1e1e1e;
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 35px;
+}
+
+.editor-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.editor-tabs::-webkit-scrollbar-thumb {
+  background: #4c4c4c;
+  border-radius: 2px;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  background: #2d2d30;
+  color: #969696;
+  cursor: pointer;
+  border-right: 1px solid #1e1e1e;
+  position: relative;
+  min-width: 120px;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.tab:hover {
+  background: #323233;
+  color: #e0e0e0;
+}
+
+.tab.active {
+  background: #1e1e1e;
+  color: #ffffff;
+}
+
+.tab-icon {
+  font-size: 1rem;
+}
+
+.tab-name {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.tab-dirty-indicator {
+  color: #4ec9b0;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.tab-close {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  border-radius: 3px;
+}
+
+.tab:hover .tab-close {
+  opacity: 0.7;
+}
+
+.tab-close:hover {
+  opacity: 1 !important;
+  background: #464647;
+}
+
+.tab.dirty .tab-close {
+  opacity: 0.5;
+}

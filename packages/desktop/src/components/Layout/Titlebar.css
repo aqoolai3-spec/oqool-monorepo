@@ -1,0 +1,102 @@
+.titlebar {
+  height: 35px;
+  background: #323233;
+  border-bottom: 1px solid #1e1e1e;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.titlebar-drag-region {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+  padding: 0 0.5rem;
+}
+
+.titlebar-left,
+.titlebar-center,
+.titlebar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-left {
+  flex: 0 0 auto;
+}
+
+.titlebar-center {
+  flex: 1;
+  justify-content: center;
+}
+
+.titlebar-right {
+  flex: 0 0 auto;
+}
+
+.app-icon {
+  font-size: 1.2rem;
+}
+
+.app-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #cccccc;
+}
+
+.workspace-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  background: #2d2d30;
+  border-radius: 4px;
+}
+
+.workspace-icon {
+  font-size: 0.9rem;
+}
+
+.workspace-name {
+  font-size: 0.85rem;
+  color: #969696;
+}
+
+.titlebar-control {
+  -webkit-app-region: no-drag;
+  background: none;
+  border: none;
+  color: #cccccc;
+  font-size: 1.2rem;
+  width: 46px;
+  height: 35px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.titlebar-control:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.titlebar-control.close:hover {
+  background: #e81123;
+  color: white;
+}
+
+.titlebar-control.minimize {
+  font-size: 1.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.titlebar-control.maximize {
+  font-size: 1rem;
+}
+
+.titlebar-control.close {
+  font-size: 1.5rem;
+}

@@ -1,0 +1,29 @@
+appId: com.oqool.desktop
+productName: Oqool Desktop IDE
+copyright: Copyright © 2025 Oqool Team
+
+directories:
+  output: release
+  buildResources: assets
+
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+    - zip
+
+win:
+  target:
+    - nsis
+    - portable
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Development

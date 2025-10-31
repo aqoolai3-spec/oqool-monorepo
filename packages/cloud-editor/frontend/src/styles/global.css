@@ -1,0 +1,40 @@
+:root {
+  --bg: #0f1724;
+  --panel: #111827;
+  --muted: #9ca3af;
+  --accent: #60a5fa;
+}
+
+body, html, #root {
+  height: 100%;
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  background: var(--bg);
+  color: #e5e7eb;
+}
+
+.app-root {
+  display: grid;
+  grid-template-columns: 220px 240px 1fr 320px;
+  height: 100vh;
+}
+
+.editor-region {
+  background: linear-gradient(180deg, #0b1220 0%, #071022 100%);
+  padding: 12px;
+}
+
+.filetree-region {
+  background: var(--panel);
+  padding: 8px;
+}
+
+.sidebar-region {
+  background: var(--panel);
+  padding: 8px;
+}
+
+.terminal-region {
+  background: #05080b;
+  padding: 6px;
+}

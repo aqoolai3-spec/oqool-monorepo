@@ -1,0 +1,162 @@
+.git-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #252526;
+  color: #cccccc;
+}
+
+.git-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.git-header h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.git-branch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #1e1e1e;
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.git-commit-section {
+  padding: 1rem;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.commit-message {
+  width: 100%;
+  background: #1e1e1e;
+  border: 1px solid #3c3c3c;
+  color: #cccccc;
+  padding: 0.75rem;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  resize: vertical;
+  margin-bottom: 0.5rem;
+}
+
+.commit-message:focus {
+  outline: none;
+  border-color: #007acc;
+}
+
+.commit-button {
+  width: 100%;
+  background: #0e639c;
+  color: white;
+  border: none;
+  padding: 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.commit-button:hover:not(:disabled) {
+  background: #1177bb;
+}
+
+.commit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.git-changes {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
+.changes-section {
+  margin-bottom: 1rem;
+}
+
+.section-header {
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #969696;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.change-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.change-item:hover {
+  background: #2a2d2e;
+}
+
+.change-item .file-icon {
+  font-size: 1rem;
+}
+
+.change-item .file-name {
+  flex: 1;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.change-item.staged {
+  color: #4ec9b0;
+}
+
+.change-item.modified {
+  color: #cca700;
+}
+
+.change-item.untracked {
+  color: #969696;
+}
+
+.action-button {
+  background: none;
+  border: 1px solid #3c3c3c;
+  color: #cccccc;
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  transition: all 0.15s;
+  opacity: 0;
+}
+
+.change-item:hover .action-button {
+  opacity: 1;
+}
+
+.action-button:hover {
+  background: #0e639c;
+  border-color: #0e639c;
+  color: white;
+}
+
+.git-loading {
+  padding: 2rem;
+  text-align: center;
+  opacity: 0.6;
+}

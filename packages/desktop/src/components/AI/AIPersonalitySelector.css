@@ -1,0 +1,19 @@
+.ai-personality-selector {
+  background: #1e1e1e;
+  border: 1px solid #3c3c3c;
+  color: #cccccc;
+  padding: 0.4rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.ai-personality-selector:hover {
+  border-color: #0e639c;
+}
+
+.ai-personality-selector:focus {
+  outline: none;
+  border-color: #0e639c;
+}

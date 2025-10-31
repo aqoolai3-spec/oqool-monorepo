@@ -1,0 +1,42 @@
+.ai-message {
+  background: #1e1e1e;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 3px solid #4c4c4c;
+}
+
+.ai-message.user {
+  border-left-color: #0e639c;
+  background: #1a3a52;
+}
+
+.ai-message.assistant {
+  border-left-color: #4ec9b0;
+  background: #1e2d2a;
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.message-role {
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.message-time {
+  opacity: 0.6;
+  font-size: 0.75rem;
+}
+
+.message-content {
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  direction: rtl;
+  text-align: right;
+}

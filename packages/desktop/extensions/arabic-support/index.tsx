@@ -1,0 +1,1 @@
+// Arabic Support Extension

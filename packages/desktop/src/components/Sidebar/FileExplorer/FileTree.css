@@ -1,0 +1,4 @@
+.file-tree {
+  display: flex;
+  flex-direction: column;
+}

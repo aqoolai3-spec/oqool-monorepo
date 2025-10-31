@@ -1,0 +1,40 @@
+.oqool-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.input-label {
+  font-size: 0.85rem;
+  color: #cccccc;
+  font-weight: 500;
+}
+
+.oqool-input {
+  background: #1e1e1e;
+  border: 1px solid #3c3c3c;
+  color: #cccccc;
+  padding: 0.75rem;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+}
+
+.oqool-input:focus {
+  outline: none;
+  border-color: #007acc;
+}
+
+.oqool-input.error {
+  border-color: #c5312d;
+}
+
+.input-error {
+  font-size: 0.8rem;
+  color: #c5312d;
+}
+
+.oqool-input::placeholder {
+  color: #6a6a6a;
+}

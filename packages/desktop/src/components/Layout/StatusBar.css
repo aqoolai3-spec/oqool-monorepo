@@ -1,0 +1,55 @@
+.status-bar {
+  height: 22px;
+  background: #007acc;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+.status-left,
+.status-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.status-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.status-item .icon {
+  font-size: 0.85rem;
+}
+
+.status-item.git-branch {
+  font-weight: 500;
+}
+
+.status-item .icon.error {
+  color: #f48771;
+}
+
+.status-item .icon.warning {
+  color: #cca700;
+}
+
+.status-item.language {
+  font-weight: 500;
+}
+
+.status-item.encoding {
+  opacity: 0.8;
+}

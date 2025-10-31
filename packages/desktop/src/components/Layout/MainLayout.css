@@ -1,0 +1,106 @@
+.main-layout {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  color: #cccccc;
+  overflow: hidden;
+}
+
+/* Titlebar */
+.titlebar {
+  height: 35px;
+  background: #323233;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  border-bottom: 1px solid #1e1e1e;
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.titlebar-left,
+.titlebar-center,
+.titlebar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.app-icon {
+  font-size: 1.2rem;
+}
+
+.app-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.workspace-name {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.titlebar-button {
+  -webkit-app-region: no-drag;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.titlebar-button:hover {
+  background: #464647;
+}
+
+/* Layout Content */
+.layout-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Left Sidebar */
+.left-sidebar {
+  background: #252526;
+  border-right: 1px solid #1e1e1e;
+  min-width: 200px;
+  max-width: 400px;
+  overflow: hidden;
+}
+
+/* Center Area */
+.center-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editor-area {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.terminal-area {
+  min-height: 150px;
+  max-height: 400px;
+  overflow: hidden;
+}
+
+/* Right Sidebar */
+.right-sidebar {
+  background: #252526;
+  border-left: 1px solid #1e1e1e;
+  min-width: 250px;
+  max-width: 500px;
+  overflow: hidden;
+}

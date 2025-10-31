@@ -1,0 +1,62 @@
+.personality-selector {
+  padding: 1.5rem;
+  background: #252526;
+}
+
+.selector-title {
+  margin: 0 0 1rem 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #cccccc;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.personality-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.75rem;
+}
+
+.personality-card {
+  background: #1e1e1e;
+  border: 2px solid #3c3c3c;
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.personality-card:hover {
+  border-color: #007acc;
+  background: #2a2d2e;
+}
+
+.personality-card.selected {
+  border-color: #007acc;
+  background: #0e639c;
+}
+
+.personality-card.selected .personality-name,
+.personality-card.selected .personality-description {
+  color: white;
+}
+
+.personality-icon {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.personality-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #cccccc;
+  margin-bottom: 0.25rem;
+}
+
+.personality-description {
+  font-size: 0.75rem;
+  color: #969696;
+  line-height: 1.4;
+}

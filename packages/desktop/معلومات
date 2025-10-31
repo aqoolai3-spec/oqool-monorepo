@@ -1,0 +1,3034 @@
+🚀 الملفات الحاسمة - بدون تعليق
+
+📁 electron/main.ts
+typescriptimport { app, BrowserWindow, ipcMain, Menu } from 'electron';
+import path from 'path';
+import { fileSystemHandlers } from './ipc/file-system';
+import { terminalHandlers } from './ipc/terminal';
+import { aiHandlers } from './ipc/ai';
+import { settingsHandlers } from './ipc/settings';
+import { gitHandlers } from './ipc/git';
+import { extensionHandlers } from './ipc/extensions';
+import { logger } from './services/logger';
+import { setupAutoUpdater } from './services/updater';
+import { createApplicationMenu } from './menu';
+
+let mainWindow: BrowserWindow | null = null;
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1400,
+    height: 900,
+    minWidth: 800,
+    minHeight: 600,
+    backgroundColor: '#1e1e1e',
+    frame: false,
+    titleBarStyle: 'hidden',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+    },
+    show: false,
+  });
+
+  if (app.isPackaged) {
+    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
+  } else {
+    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.webContents.openDevTools();
+  }
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+    logger.info('Main window shown');
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
+  const menu = createApplicationMenu();
+  Menu.setApplicationMenu(menu);
+}
+
+app.whenReady().then(() => {
+  logger.info('App ready, creating window');
+  
+  fileSystemHandlers();
+  terminalHandlers();
+  aiHandlers();
+  settingsHandlers();
+  gitHandlers();
+  extensionHandlers();
+  
+  createWindow();
+  setupAutoUpdater();
+  
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled rejection at:', promise, 'reason:', reason);
+});
+
+📁 electron/preload.ts
+typescriptimport { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
+
+const validChannels = {
+  send: [
+    'fs:read',
+    'fs:write',
+    'fs:readdir',
+    'fs:mkdir',
+    'fs:delete',
+    'fs:rename',
+    'fs:exists',
+    'fs:watch',
+    'terminal:create',
+    'terminal:write',
+    'terminal:resize',
+    'terminal:kill',
+    'ai:call',
+    'ai:stream',
+    'ai:inline-suggest',
+    'settings:get',
+    'settings:set',
+    'settings:getAll',
+    'git:status',
+    'git:commit',
+    'git:push',
+    'git:pull',
+    'git:diff',
+    'extension:install',
+    'extension:uninstall',
+    'extension:list',
+    'window:minimize',
+    'window:maximize',
+    'window:close',
+  ],
+  on: [
+    'terminal:data',
+    'fs:watcher-event',
+    'extension:loaded',
+    'ai:stream-data',
+    'update:available',
+    'update:downloaded',
+  ],
+};
+
+contextBridge.exposeInMainWorld('electron', {
+  invoke: async (channel: string, ...args: any[]) => {
+    if (validChannels.send.includes(channel)) {
+      return await ipcRenderer.invoke(channel, ...args);
+    }
+    throw new Error(`Invalid channel: ${channel}`);
+  },
+
+  on: (channel: string, callback: (...args: any[]) => void) => {
+    if (validChannels.on.includes(channel)) {
+      const subscription = (_event: IpcRendererEvent, ...args: any[]) => {
+        callback(...args);
+      };
+      ipcRenderer.on(channel, subscription);
+      return () => {
+        ipcRenderer.removeListener(channel, subscription);
+      };
+    }
+    throw new Error(`Invalid channel: ${channel}`);
+  },
+
+  removeListener: (channel: string, callback: (...args: any[]) => void) => {
+    if (validChannels.on.includes(channel)) {
+      ipcRenderer.removeListener(channel, callback);
+    }
+  },
+});
+
+contextBridge.exposeInMainWorld('platform', {
+  os: process.platform,
+  arch: process.arch,
+  version: process.versions,
+});
+
+📁 electron/ipc/file-system.ts
+typescriptimport { ipcMain, IpcMainInvokeEvent } from 'electron';
+import fs from 'fs-extra';
+import path from 'path';
+import chokidar from 'chokidar';
+import { logger } from '../services/logger';
+
+const watchers = new Map<string, chokidar.FSWatcher>();
+
+export function fileSystemHandlers() {
+  ipcMain.handle('fs:read', async (_event: IpcMainInvokeEvent, filePath: string) => {
+    try {
+      logger.debug('Reading file:', filePath);
+      const content = await fs.readFile(filePath, 'utf-8');
+      return { success: true, content };
+    } catch (error: any) {
+      logger.error('Error reading file:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('fs:write', async (_event: IpcMainInvokeEvent, filePath: string, content: string) => {
+    try {
+      logger.debug('Writing file:', filePath);
+      await fs.ensureDir(path.dirname(filePath));
+      await fs.writeFile(filePath, content, 'utf-8');
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error writing file:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('fs:readdir', async (_event: IpcMainInvokeEvent, dirPath: string) => {
+    try {
+      logger.debug('Reading directory:', dirPath);
+      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      
+      const items = await Promise.all(
+        entries.map(async (entry) => {
+          const fullPath = path.join(dirPath, entry.name);
+          const stats = await fs.stat(fullPath);
+          
+          return {
+            name: entry.name,
+            path: fullPath,
+            isDirectory: entry.isDirectory(),
+            isFile: entry.isFile(),
+            size: stats.size,
+            modified: stats.mtime,
+            created: stats.birthtime,
+          };
+        })
+      );
+      
+      return { success: true, items };
+    } catch (error: any) {
+      logger.error('Error reading directory:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('fs:mkdir', async (_event: IpcMainInvokeEvent, dirPath: string) => {
+    try {
+      logger.debug('Creating directory:', dirPath);
+      await fs.ensureDir(dirPath);
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error creating directory:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('fs:delete', async (_event: IpcMainInvokeEvent, targetPath: string) => {
+    try {
+      logger.debug('Deleting:', targetPath);
+      await fs.remove(targetPath);
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error deleting:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('fs:rename', async (_event: IpcMainInvokeEvent, oldPath: string, newPath: string) => {
+    try {
+      logger.debug('Renaming:', oldPath, 'to', newPath);
+      await fs.rename(oldPath, newPath);
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error renaming:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('fs:exists', async (_event: IpcMainInvokeEvent, targetPath: string) => {
+    try {
+      const exists = await fs.pathExists(targetPath);
+      return { success: true, exists };
+    } catch (error: any) {
+      logger.error('Error checking existence:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('fs:watch', async (event: IpcMainInvokeEvent, dirPath: string, watchId: string) => {
+    try {
+      logger.debug('Setting up watcher for:', dirPath);
+      
+      if (watchers.has(watchId)) {
+        await watchers.get(watchId)?.close();
+      }
+
+      const watcher = chokidar.watch(dirPath, {
+        ignored: /(^|[\/\\])\../, // ignore dotfiles
+        persistent: true,
+        ignoreInitial: true,
+        depth: 10,
+      });
+
+      watcher
+        .on('add', (filePath) => {
+          event.sender.send('fs:watcher-event', {
+            type: 'add',
+            path: filePath,
+            watchId,
+          });
+        })
+        .on('change', (filePath) => {
+          event.sender.send('fs:watcher-event', {
+            type: 'change',
+            path: filePath,
+            watchId,
+          });
+        })
+        .on('unlink', (filePath) => {
+          event.sender.send('fs:watcher-event', {
+            type: 'unlink',
+            path: filePath,
+            watchId,
+          });
+        })
+        .on('addDir', (dirPath) => {
+          event.sender.send('fs:watcher-event', {
+            type: 'addDir',
+            path: dirPath,
+            watchId,
+          });
+        })
+        .on('unlinkDir', (dirPath) => {
+          event.sender.send('fs:watcher-event', {
+            type: 'unlinkDir',
+            path: dirPath,
+            watchId,
+          });
+        });
+
+      watchers.set(watchId, watcher);
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error setting up watcher:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('fs:unwatch', async (_event: IpcMainInvokeEvent, watchId: string) => {
+    try {
+      const watcher = watchers.get(watchId);
+      if (watcher) {
+        await watcher.close();
+        watchers.delete(watchId);
+      }
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error closing watcher:', error);
+      return { success: false, error: error.message };
+    }
+  });
+}
+
+📁 electron/ipc/terminal.ts
+typescriptimport { ipcMain, IpcMainInvokeEvent } from 'electron';
+import * as pty from 'node-pty';
+import { logger } from '../services/logger';
+
+const terminals = new Map<string, pty.IPty>();
+
+export function terminalHandlers() {
+  ipcMain.handle('terminal:create', async (event: IpcMainInvokeEvent, terminalId: string, cwd?: string) => {
+    try {
+      logger.debug('Creating terminal:', terminalId);
+
+      const shell = process.platform === 'win32' ? 'powershell.exe' : 'bash';
+      const ptyProcess = pty.spawn(shell, [], {
+        name: 'xterm-256color',
+        cols: 80,
+        rows: 30,
+        cwd: cwd || process.env.HOME || process.cwd(),
+        env: process.env as { [key: string]: string },
+      });
+
+      ptyProcess.onData((data) => {
+        event.sender.send('terminal:data', { terminalId, data });
+      });
+
+      ptyProcess.onExit(({ exitCode, signal }) => {
+        logger.debug('Terminal exited:', terminalId, exitCode, signal);
+        terminals.delete(terminalId);
+        event.sender.send('terminal:exit', { terminalId, exitCode, signal });
+      });
+
+      terminals.set(terminalId, ptyProcess);
+
+      return { success: true, terminalId };
+    } catch (error: any) {
+      logger.error('Error creating terminal:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('terminal:write', async (_event: IpcMainInvokeEvent, terminalId: string, data: string) => {
+    try {
+      const terminal = terminals.get(terminalId);
+      if (!terminal) {
+        throw new Error('Terminal not found');
+      }
+
+      terminal.write(data);
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error writing to terminal:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('terminal:resize', async (_event: IpcMainInvokeEvent, terminalId: string, cols: number, rows: number) => {
+    try {
+      const terminal = terminals.get(terminalId);
+      if (!terminal) {
+        throw new Error('Terminal not found');
+      }
+
+      terminal.resize(cols, rows);
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error resizing terminal:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('terminal:kill', async (_event: IpcMainInvokeEvent, terminalId: string) => {
+    try {
+      const terminal = terminals.get(terminalId);
+      if (!terminal) {
+        return { success: true };
+      }
+
+      terminal.kill();
+      terminals.delete(terminalId);
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error killing terminal:', error);
+      return { success: false, error: error.message };
+    }
+  });
+}
+
+📁 electron/ipc/ai.ts
+typescriptimport { ipcMain, IpcMainInvokeEvent } from 'electron';
+import Anthropic from '@anthropic-ai/sdk';
+import { logger } from '../services/logger';
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY || '',
+});
+
+export function aiHandlers() {
+  ipcMain.handle('ai:call', async (_event: IpcMainInvokeEvent, prompt: string, personality?: string, model?: string) => {
+    try {
+      logger.debug('AI call with personality:', personality);
+
+      const systemPrompt = getPersonalityPrompt(personality);
+      const selectedModel = model || 'claude-sonnet-4-20250514';
+
+      const response = await anthropic.messages.create({
+        model: selectedModel,
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      });
+
+      const content = response.content[0];
+      const text = content.type === 'text' ? content.text : '';
+
+      return { success: true, response: text, usage: response.usage };
+    } catch (error: any) {
+      logger.error('Error calling AI:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('ai:stream', async (event: IpcMainInvokeEvent, requestId: string, prompt: string, personality?: string) => {
+    try {
+      logger.debug('AI streaming with personality:', personality);
+
+      const systemPrompt = getPersonalityPrompt(personality);
+
+      const stream = await anthropic.messages.stream({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 8192,
+        system: systemPrompt,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      });
+
+      stream.on('text', (text) => {
+        event.sender.send('ai:stream-data', { requestId, type: 'text', data: text });
+      });
+
+      stream.on('end', () => {
+        event.sender.send('ai:stream-data', { requestId, type: 'end' });
+      });
+
+      stream.on('error', (error) => {
+        event.sender.send('ai:stream-data', { requestId, type: 'error', error: error.message });
+      });
+
+      return { success: true, requestId };
+    } catch (error: any) {
+      logger.error('Error streaming AI:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('ai:inline-suggest', async (_event: IpcMainInvokeEvent, code: string, language: string, position: { line: number; column: number }) => {
+    try {
+      const prompt = `Continue this ${language} code from line ${position.line}, column ${position.column}. Provide ONLY the completion code, no explanations, no markdown:
+
+${code}`;
+
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      });
+
+      const content = response.content[0];
+      const suggestion = content.type === 'text' ? content.text.trim() : '';
+
+      return { success: true, suggestion };
+    } catch (error: any) {
+      logger.error('Error getting inline suggestion:', error);
+      return { success: false, error: error.message };
+    }
+  });
+}
+
+function getPersonalityPrompt(personality?: string): string {
+  const prompts: Record<string, string> = {
+    alex: 'أنت Alex، معماري أنظمة خبير. تركز على التصميم المعماري، الأنماط، والحلول القابلة للتوسع.',
+    sarah: 'أنت Sarah، مطورة Full-stack محترفة. تكتب كود نظيف، قابل للصيانة، وتتبع أفضل الممارسات.',
+    mike: 'أنت Mike، خبير في مراجعة الكود. تركز على جودة الكود، الأمان، والأداء.',
+    guardian: 'أنت Guardian، خبير أمن سيبراني. تركز على الثغرات الأمنية وأفضل ممارسات الأمان.',
+    olivia: 'أنت Olivia، خبيرة في الاختبارات. تكتب اختبارات شاملة وتغطي جميع الحالات.',
+    tom: 'أنت Tom، خبير في تحسين الأداء. تركز على الكفاءة، السرعة، واستهلاك الموارد.',
+    emma: 'أنت Emma، خبيرة في التوثيق. تكتب توثيق واضح، شامل، وسهل الفهم.',
+    max: 'أنت Max، معلم برمجة صبور. تشرح المفاهيم بوضوح وتساعد في التعلم.',
+  };
+
+  return prompts[personality || ''] || 'أنت مساعد برمجة ذكي ومفيد.';
+}
+
+📁 electron/services/logger.ts
+typescriptimport fs from 'fs';
+import path from 'path';
+import { app } from 'electron';
+
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+class Logger {
+  private logPath: string;
+  private logLevel: LogLevel;
+
+  constructor() {
+    const userDataPath = app.getPath('userData');
+    this.logPath = path.join(userDataPath, 'logs');
+    this.logLevel = (process.env.LOG_LEVEL as LogLevel) || 'info';
+    this.ensureLogDir();
+  }
+
+  private ensureLogDir() {
+    if (!fs.existsSync(this.logPath)) {
+      fs.mkdirSync(this.logPath, { recursive: true });
+    }
+  }
+
+  private shouldLog(level: LogLevel): boolean {
+    const levels: LogLevel[] = ['debug', 'info', 'warn', 'error'];
+    const currentLevelIndex = levels.indexOf(this.logLevel);
+    const messageLevelIndex = levels.indexOf(level);
+    return messageLevelIndex >= currentLevelIndex;
+  }
+
+  private write(level: LogLevel, message: string, data?: any) {
+    if (!this.shouldLog(level)) return;
+
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+
+    console.log(logMessage);
+    if (data) {
+      console.log(data);
+    }
+
+    const logFile = path.join(
+      this.logPath,
+      `${new Date().toISOString().split('T')[0]}.log`
+    );
+
+    const logEntry = data
+      ? `${logMessage}\n${JSON.stringify(data, null, 2)}\n\n`
+      : `${logMessage}\n`;
+
+    try {
+      fs.appendFileSync(logFile, logEntry);
+    } catch (error) {
+      console.error('Failed to write to log file:', error);
+    }
+  }
+
+  debug(message: string, data?: any) {
+    this.write('debug', message, data);
+  }
+
+  info(message: string, data?: any) {
+    this.write('info', message, data);
+  }
+
+  warn(message: string, data?: any) {
+    this.write('warn', message, data);
+  }
+
+  error(message: string, data?: any) {
+    this.write('error', message, data);
+  }
+}
+
+export const logger = new Logger();
+
+📁 src/features/extensions/extension-manager.ts
+typescriptimport { Extension, ExtensionContext, ExtensionAPI } from './extension-api';
+import { ExtensionLoader } from './extension-loader';
+import { ExtensionHost } from './extension-host';
+import { SandboxManager } from './sandboxing';
+
+export class ExtensionManager {
+  private extensions: Map<string, Extension> = new Map();
+  private loader: ExtensionLoader;
+  private host: ExtensionHost;
+  private sandbox: SandboxManager;
+  private contexts: Map<string, ExtensionContext> = new Map();
+
+  constructor() {
+    this.loader = new ExtensionLoader();
+    this.host = new ExtensionHost();
+    this.sandbox = new SandboxManager();
+  }
+
+  async loadExtension(extensionPath: string): Promise<void> {
+    try {
+      const manifest = await this.loader.loadManifest(extensionPath);
+      
+      if (this.extensions.has(manifest.id)) {
+        throw new Error(`Extension ${manifest.id} is already loaded`);
+      }
+
+      const sandboxedEnv = this.sandbox.createSandbox(manifest.id);
+      
+      const context: ExtensionContext = {
+        extensionPath,
+        globalState: new Map(),
+        workspaceState: new Map(),
+        subscriptions: [],
+        extensionId: manifest.id,
+      };
+
+      const api = this.createExtensionAPI(manifest.id, context);
+      
+      const extensionModule = await this.loader.loadExtensionCode(
+        extensionPath,
+        manifest.main,
+        sandboxedEnv
+      );
+
+      if (typeof extensionModule.activate === 'function') {
+        await extensionModule.activate(api);
+      }
+
+      const extension: Extension = {
+        id: manifest.id,
+        name: manifest.name,
+        version: manifest.version,
+        description: manifest.description,
+        author: manifest.author,
+        main: manifest.main,
+        contributes: manifest.contributes,
+        isActive: true,
+        context,
+        module: extensionModule,
+      };
+
+      this.extensions.set(manifest.id, extension);
+      this.contexts.set(manifest.id, context);
+
+      this.host.registerExtension(extension);
+
+      console.log(`Extension ${manifest.id} loaded successfully`);
+    } catch (error) {
+      console.error('Failed to load extension:', error);
+      throw error;
+    }
+  }
+
+  async unloadExtension(extensionId: string): Promise<void> {
+    try {
+      const extension = this.extensions.get(extensionId);
+      if (!extension) {
+        throw new Error(`Extension ${extensionId} is not loaded`);
+      }
+
+      if (typeof extension.module?.deactivate === 'function') {
+        await extension.module.deactivate();
+      }
+
+      const context = this.contexts.get(extensionId);
+      if (context) {
+        context.subscriptions.forEach((subscription) => {
+          if (typeof subscription.dispose === 'function') {
+            subscription.dispose();
+          }
+        });
+      }
+
+      this.host.unregisterExtension(extensionId);
+      this.sandbox.destroySandbox(extensionId);
+      this.extensions.delete(extensionId);
+      this.contexts.delete(extensionId);
+
+      console.log(`Extension ${extensionId} unloaded successfully`);
+    } catch (error) {
+      console.error('Failed to unload extension:', error);
+      throw error;
+    }
+  }
+
+  getExtension(extensionId: string): Extension | undefined {
+    return this.extensions.get(extensionId);
+  }
+
+  getAllExtensions(): Extension[] {
+    return Array.from(this.extensions.values());
+  }
+
+  getActiveExtensions(): Extension[] {
+    return Array.from(this.extensions.values()).filter((ext) => ext.isActive);
+  }
+
+  async enableExtension(extensionId: string): Promise<void> {
+    const extension = this.extensions.get(extensionId);
+    if (!extension) {
+      throw new Error(`Extension ${extensionId} not found`);
+    }
+
+    if (extension.isActive) {
+      return;
+    }
+
+    if (typeof extension.module?.activate === 'function') {
+      const context = this.contexts.get(extensionId);
+      const api = this.createExtensionAPI(extensionId, context!);
+      await extension.module.activate(api);
+    }
+
+    extension.isActive = true;
+  }
+
+  async disableExtension(extensionId: string): Promise<void> {
+    const extension = this.extensions.get(extensionId);
+    if (!extension) {
+      throw new Error(`Extension ${extensionId} not found`);
+    }
+
+    if (!extension.isActive) {
+      return;
+    }
+
+    if (typeof extension.module?.deactivate === 'function') {
+      await extension.module.deactivate();
+    }
+
+    extension.isActive = false;
+  }
+
+  private createExtensionAPI(extensionId: string, context: ExtensionContext): ExtensionAPI {
+    return {
+      registerCommand: (commandId: string, handler: (...args: any[]) => any) => {
+        this.host.registerCommand(extensionId, commandId, handler);
+        context.subscriptions.push({
+          dispose: () => this.host.unregisterCommand(commandId),
+        });
+      },
+
+      registerPanel: (panelId: string, title: string, component: any) => {
+        this.host.registerPanel(extensionId, panelId, title, component);
+        context.subscriptions.push({
+          dispose: () => this.host.unregisterPanel(panelId),
+        });
+      },
+
+      registerLanguage: (languageId: string, config: any) => {
+        this.host.registerLanguage(extensionId, languageId, config);
+        context.subscriptions.push({
+          dispose: () => this.host.unregisterLanguage(languageId),
+        });
+      },
+
+      registerTheme: (themeId: string, theme: any) => {
+        this.host.registerTheme(extensionId, themeId, theme);
+        context.subscriptions.push({
+          dispose: () => this.host.unregisterTheme(themeId),
+        });
+      },
+
+      getGlobalState: () => context.globalState,
+      getWorkspaceState: () => context.workspaceState,
+
+      showMessage: (message: string, type: 'info' | 'warning' | 'error') => {
+        this.host.showMessage(message, type);
+      },
+
+      getConfiguration: (section?: string) => {
+        return this.host.getConfiguration(section);
+      },
+    };
+  }
+}
+
+📁 src/features/extensions/extension-api.ts
+typescriptexport interface Extension {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  main: string;
+  contributes?: ExtensionContributions;
+  isActive?: boolean;
+  context?: ExtensionContext;
+  module?: any;
+}
+
+export interface ExtensionContributions {
+  commands?: Command[];
+  keybindings?: Keybinding[];
+  languages?: Language[];
+  themes?: Theme[];
+  panels?: Panel[];
+  menus?: Menu[];
+}
+
+export interface Command {
+  id: string;
+  title: string;
+  icon?: string;
+  category?: string;
+}
+
+export interface Keybinding {
+  key: string;
+  command: string;
+  when?: string;
+  mac?: string;
+  linux?: string;
+  win?: string;
+}
+
+export interface Language {
+  id: string;
+  extensions: string[];
+  aliases?: string[];
+  configuration?: any;
+}
+
+export interface Theme {
+  id: string;
+  label: string;
+  uiTheme: 'vs' | 'vs-dark' | 'hc-black';
+  path: string;
+}
+
+export interface Panel {
+  id: string;
+  title: string;
+  icon: string;
+  order?: number;
+}
+
+export interface Menu {
+  id: string;
+  items: MenuItem[];
+}
+
+export interface MenuItem {
+  command: string;
+  when?: string;
+  group?: string;
+}
+
+export interface ExtensionContext {
+  extensionPath: string;
+  globalState: Map<string, any>;
+  workspaceState: Map<string, any>;
+  subscriptions: Disposable[];
+  extensionId: string;
+}
+
+export interface Disposable {
+  dispose(): void;
+}
+
+export interface ExtensionAPI {
+  registerCommand(commandId: string, handler: (...args: any[]) => any): void;
+  registerPanel(panelId: string, title: string, component: any): void;
+  registerLanguage(languageId: string, config: any): void;
+  registerTheme(themeId: string, theme: any): void;
+  getGlobalState(): Map<string, any>;
+  getWorkspaceState(): Map<string, any>;
+  showMessage(message: string, type: 'info' | 'warning' | 'error'): void;
+  getConfiguration(section?: string): any;
+}
+
+export interface ExtensionManifest {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  main: string;
+  engines: {
+    oqool: string;
+  };
+  contributes?: ExtensionContributions;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+}
+
+📁 src/features/extensions/extension-host.ts
+typescriptimport { Extension } from './extension-api';
+
+export class ExtensionHost {
+  private commands: Map<string, { extensionId: string; handler: (...args: any[]) => any }> = new Map();
+  private panels: Map<string, { extensionId: string; title: string; component: any }> = new Map();
+  private languages: Map<string, { extensionId: string; config: any }> = new Map();
+  private themes: Map<string, { extensionId: string; theme: any }> = new Map();
+
+  registerExtension(extension: Extension): void {
+    if (extension.contributes?.commands) {
+      for (const command of extension.contributes.commands) {
+        console.log(`Registering command: ${command.id} from ${extension.id}`);
+      }
+    }
+
+    if (extension.contributes?.panels) {
+      for (const panel of extension.contributes.panels) {
+        console.log(`Registering panel: ${panel.id} from ${extension.id}`);
+      }
+    }
+
+    if (extension.contributes?.languages) {
+      for (const language of extension.contributes.languages) {
+        this.languages.set(language.id, {
+          extensionId: extension.id,
+          config: language,
+        });
+        console.log(`Registering language: ${language.id} from ${extension.id}`);
+      }
+    }
+
+    if (extension.contributes?.themes) {
+      for (const theme of extension.contributes.themes) {
+        this.themes.set(theme.id, {
+          extensionId: extension.id,
+          theme,
+        });
+        console.log(`Registering theme: ${theme.id} from ${extension.id}`);
+      }
+    }
+  }
+
+  unregisterExtension(extensionId: string): void {
+    for (const [commandId, command] of this.commands.entries()) {
+      if (command.extensionId === extensionId) {
+        this.commands.delete(commandId);
+      }
+    }
+
+    for (const [panelId, panel] of this.panels.entries()) {
+      if (panel.extensionId === extensionId) {
+        this.panels.delete(panelId);
+      }
+    }
+
+    for (const [languageId, language] of this.languages.entries()) {
+      if (language.extensionId === extensionId) {
+        this.languages.delete(languageId);
+      }
+    }
+
+    for (const [themeId, theme] of this.themes.entries()) {
+      if (theme.extensionId === extensionId) {
+        this.themes.delete(themeId);
+      }
+    }
+  }
+
+  registerCommand(extensionId: string, commandId: string, handler: (...args: any[]) => any): void {
+    this.commands.set(commandId, { extensionId, handler });
+  }
+
+  unregisterCommand(commandId: string): void {
+    this.commands.delete(commandId);
+  }
+
+  executeCommand(commandId: string, ...args: any[]): any {
+    const command = this.commands.get(commandId);
+    if (!command) {
+      throw new Error(`Command ${commandId} not found`);
+    }
+
+    try {
+      return command.handler(...args);
+    } catch (error) {
+      console.error(`Error executing command ${commandId}:`, error);
+      throw error;
+    }
+  }
+
+  registerPanel(extensionId: string, panelId: string, title: string, component: any): void {
+    this.panels.set(panelId, { extensionId, title, component });
+  }
+
+  unregisterPanel(panelId: string): void {
+    this.panels.delete(panelId);
+  }
+
+  getPanel(panelId: string) {
+    return this.panels.get(panelId);
+  }
+
+  getAllPanels() {
+    return Array.from(this.panels.entries()).map(([id, panel]) => ({
+      id,
+      ...panel,
+    }));
+  }
+
+  registerLanguage(extensionId: string, languageId: string, config: any): void {
+    this.languages.set(languageId, { extensionId, config });
+  }
+
+  unregisterLanguage(languageId: string): void {
+    this.languages.delete(languageId);
+  }
+
+  getLanguage(languageId: string) {
+    return this.languages.get(languageId);
+  }
+
+  registerTheme(extensionId: string, themeId: string, theme: any): void {
+    this.themes.set(themeId, { extensionId, theme });
+  }
+
+  unregisterTheme(themeId: string): void {
+    this.themes.delete(themeId);
+  }
+
+  getTheme(themeId: string) {
+    return this.themes.get(themeId);
+  }
+
+  getAllThemes() {
+    return Array.from(this.themes.entries()).map(([id, theme]) => ({
+      id,
+      ...theme.theme,
+    }));
+  }
+
+  showMessage(message: string, type: 'info' | 'warning' | 'error'): void {
+    window.dispatchEvent(
+      new CustomEvent('oqool:show-message', {
+        detail: { message, type },
+      })
+    );
+  }
+
+  getConfiguration(section?: string): any {
+    return {};
+  }
+}
+
+📁 src/features/extensions/sandboxing.ts
+typescriptexport class SandboxManager {
+  private sandboxes: Map<string, SandboxEnvironment> = new Map();
+
+  createSandbox(extensionId: string): SandboxEnvironment {
+    const sandbox: SandboxEnvironment = {
+      extensionId,
+      globals: this.createRestrictedGlobals(),
+      require: this.createRestrictedRequire(),
+    };
+
+    this.sandboxes.set(extensionId, sandbox);
+    return sandbox;
+  }
+
+  destroySandbox(extensionId: string): void {
+    this.sandboxes.delete(extensionId);
+  }
+
+  getSandbox(extensionId: string): SandboxEnvironment | undefined {
+    return this.sandboxes.get(extensionId);
+  }
+
+  private createRestrictedGlobals(): Record<string, any> {
+    return {
+      console: {
+        log: (...args: any[]) => console.log('[Extension]', ...args),
+        warn: (...args: any[]) => console.warn('[Extension]', ...args),
+        error: (...args: any[]) => console.error('[Extension]', ...args),
+        info: (...args: any[]) => console.info('[Extension]', ...args),
+        debug: (...args: any[]) => console.debug('[Extension]', ...args),
+      },
+      setTimeout,
+      clearTimeout,
+      setInterval,
+      clearInterval,
+      Promise,
+      Array,
+      Object,
+      String,
+      Number,
+      Boolean,
+      Date,
+      Math,
+      JSON,
+      Map,
+      Set,
+      WeakMap,
+      WeakSet,
+      Error,
+      TypeError,
+      RangeError,
+      RegExp,
+    };
+  }
+
+  private createRestrictedRequire(): (moduleName: string) => any {
+    const allowedModules = new Set([
+      'path',
+      'events',
+    ]);
+
+    return (moduleName: string) => {
+      if (!allowedModules.has(moduleName)) {
+        throw new Error(`Module "${moduleName}" is not allowed in extension sandbox`);
+      }
+
+      return require(moduleName);
+    };
+  }
+}
+
+export interface SandboxEnvironment {
+  extensionId: string;
+  globals: Record<string, any>;
+  require: (moduleName: string) => any;
+}
+
+📁 src/features/extensions/extension-loader.ts
+typescriptimport fs from 'fs-extra';
+import path from 'path';
+import { ExtensionManifest } from './extension-api';
+import { SandboxEnvironment } from './sandboxing';
+import vm from 'vm';
+
+export class ExtensionLoader {
+  async loadManifest(extensionPath: string): Promise<ExtensionManifest> {
+    const manifestPath = path.join(extensionPath, 'package.json');
+    
+    if (!await fs.pathExists(manifestPath)) {
+      throw new Error('Extension manifest (package.json) not found');
+    }
+
+    const manifestContent = await fs.readFile(manifestPath, 'utf-8');
+    const manifest = JSON.parse(manifestContent);
+
+    this.validateManifest(manifest);
+
+    return manifest;
+  }
+
+  async loadExtensionCode(
+    extensionPath: string,
+    mainFile: string,
+    sandbox: SandboxEnvironment
+  ): Promise<any> {
+    const mainFilePath = path.join(extensionPath, mainFile);
+
+    if (!await fs.pathExists(mainFilePath)) {
+      throw new Error(`Extension main file not found: ${mainFile}`);
+    }
+
+    const code = await fs.readFile(mainFilePath, 'utf-8');
+
+    const wrappedCode = this.wrapCode(code);
+
+    const context = vm.createContext({
+      ...sandbox.globals,
+      require: sandbox.require,
+      module: { exports: {} },
+      exports: {},
+      __dirname: path.dirname(mainFilePath),
+      __filename: mainFilePath,
+    });
+
+    try {
+      vm.runInContext(wrappedCode, context, {
+        filename: mainFilePath,
+        timeout: 5000,
+      });
+
+      return context.module.exports;
+    } catch (error) {
+      console.error('Error loading extension code:', error);
+      throw new Error(`Failed to load extension: ${error}`);
+    }
+  }
+
+  private wrapCode(code: string): string {
+    return `
+(function(module, exports, require, __dirname, __filename) {
+  ${code}
+})(module, exports, require, __dirname, __filename);
+    `;
+  }
+
+  private validateManifest(manifest: any): void {
+    const required = ['id', 'name', 'version', 'description', 'author', 'main', 'engines'];
+
+    for (const field of required) {
+      if (!manifest[field]) {
+        throw new Error(`Missing required field in manifest: ${field}`);
+      }
+    }
+
+    if (!manifest.engines.oqool) {
+      throw new Error('Extension must specify compatible Oqool version in engines.oqool');
+    }
+
+    if (!manifest.main.endsWith('.js')) {
+      throw new Error('Extension main file must be a JavaScript file');
+    }
+  }
+}
+
+📁 src/features/ai/inline-suggestions.ts
+typescriptimport * as monaco from 'monaco-editor';
+
+export class InlineAISuggestions {
+  private editor: monaco.editor.IStandaloneCodeEditor;
+  private debounceTimer: NodeJS.Timeout | null = null;
+  private currentDecorations: string[] = [];
+  private isAccepting: boolean = false;
+
+  constructor(editor: monaco.editor.IStandaloneCodeEditor) {
+    this.editor = editor;
+    this.setupTriggers();
+  }
+
+  private setupTriggers(): void {
+    this.editor.onDidChangeModelContent(() => {
+      if (!this.isAccepting) {
+        this.debouncedSuggest();
+      }
+    });
+
+    this.editor.addCommand(
+      monaco.KeyCode.Tab,
+      () => {
+        this.acceptSuggestion();
+      },
+      'editorHasInlineSuggestion'
+    );
+
+    this.editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyCode.Space,
+      () => {
+        this.getSuggestion();
+      }
+    );
+
+    this.editor.onDidChangeCursorPosition(() => {
+      this.clearSuggestions();
+    });
+  }
+
+  private debouncedSuggest(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+    }
+
+    this.debounceTimer = setTimeout(() => {
+      this.getSuggestion();
+    }, 1000);
+  }
+
+  private async getSuggestion(): Promise<void> {
+    const model = this.editor.getModel();
+    if (!model) return;
+
+    const position = this.editor.getPosition();
+    if (!position) return;
+
+    const code = model.getValue();
+    const currentLine = model.getLineContent(position.lineNumber);
+
+    if (!this.shouldSuggest(currentLine)) {
+      return;
+    }
+
+    try {
+      const language = model.getLanguageId();
+      
+      const result = await window.electron.invoke('ai:inline-suggest', code, language, {
+        line: position.lineNumber,
+        column: position.column,
+      });
+
+      if (result.success && result.suggestion) {
+        this.showSuggestion(result.suggestion, position);
+      }
+    } catch (error) {
+      console.error('Failed to get AI suggestion:', error);
+    }
+  }
+
+  private shouldSuggest(line: string): boolean {
+    const triggers = ['{', '(', ':', '=', ',', ' '];
+    const lastChar = line.trim().slice(-1);
+    
+    if (triggers.includes(lastChar) || line.trim().length > 0) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private showSuggestion(suggestion: string, position: monaco.Position): void {
+    const model = this.editor.getModel();
+    if (!model) return;
+
+    this.clearSuggestions();
+
+    const suggestionLines = suggestion.split('\n');
+    const decorations: monaco.editor.IModelDeltaDecoration[] = [];
+
+    suggestionLines.forEach((line, index) => {
+      const lineNumber = position.lineNumber + index;
+      
+      decorations.push({
+        range: new monaco.Range(
+          lineNumber,
+          index === 0 ? position.column : 1,
+          lineNumber,
+          index === 0 ? position.column : 1
+        ),
+        options: {
+          after: {
+            content: line,
+            inlineClassName: 'inline-suggestion-text',
+            cursorStops: monaco.editor.InjectedTextCursorStops.None,
+          },
+          showIfCollapsed: true,
+        },
+      });
+    });
+
+    this.currentDecorations = this.editor.deltaDecorations([], decorations);
+
+    this.editor.updateOptions({
+      inlineSuggest: { enabled: true },
+    });
+  }
+
+  private acceptSuggestion(): void {
+    if (this.currentDecorations.length === 0) {
+      return;
+    }
+
+    const model = this.editor.getModel();
+    if (!model) return;
+
+    const position = this.editor.getPosition();
+    if (!position) return;
+
+    const decorations = model.getDecorationRange(this.currentDecorations[0]);
+    if (!decorations) return;
+
+    this.isAccepting = true;
+
+    const suggestionText = this.extractSuggestionText();
+
+    this.editor.executeEdits('inline-suggestion', [
+      {
+        range: new monaco.Range(
+          position.lineNumber,
+          position.column,
+          position.lineNumber,
+          position.column
+        ),
+        text: suggestionText,
+      },
+    ]);
+
+    this.clearSuggestions();
+    this.isAccepting = false;
+  }
+
+  private extractSuggestionText(): string {
+    const decorations = this.editor.getModel()?.getAllDecorations();
+    if (!decorations) return '';
+
+    const suggestionDecorations = decorations.filter((d) =>
+      this.currentDecorations.includes(d.id)
+    );
+
+    return suggestionDecorations
+      .map((d) => (d.options.after?.content as string) || '')
+      .join('\n');
+  }
+
+  private clearSuggestions(): void {
+    if (this.currentDecorations.length > 0) {
+      this.currentDecorations = this.editor.deltaDecorations(this.currentDecorations, []);
+    }
+  }
+
+  dispose(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+    }
+    this.clearSuggestions();
+  }
+}
+
+📁 config/monaco.config.ts
+typescriptimport * as monaco from 'monaco-editor';
+
+export const editorConfig: monaco.editor.IStandaloneEditorConstructionOptions = {
+  fontSize: 14,
+  fontFamily: 'Fira Code, Consolas, Monaco, monospace',
+  fontLigatures: true,
+  lineHeight: 21,
+  letterSpacing: 0,
+  
+  lineNumbers: 'on',
+  lineNumbersMinChars: 4,
+  glyphMargin: true,
+  folding: true,
+  foldingStrategy: 'indentation',
+  
+  minimap: {
+    enabled: true,
+    maxColumn: 120,
+    renderCharacters: true,
+    showSlider: 'mouseover',
+  },
+  
+  scrollbar: {
+    vertical: 'visible',
+    horizontal: 'visible',
+    useShadows: true,
+    verticalScrollbarSize: 10,
+    horizontalScrollbarSize: 10,
+  },
+  
+  scrollBeyondLastLine: false,
+  automaticLayout: true,
+  tabSize: 2,
+  insertSpaces: true,
+  detectIndentation: true,
+  trimAutoWhitespace: true,
+  
+  wordWrap: 'on',
+  wordWrapColumn: 80,
+  wrappingIndent: 'indent',
+  
+  suggestOnTriggerCharacters: true,
+  quickSuggestions: {
+    other: true,
+    comments: false,
+    strings: false,
+  },
+  quickSuggestionsDelay: 10,
+  
+  inlineSuggest: {
+    enabled: true,
+  },
+  suggest: {
+    preview: true,
+    showInlineDetails: true,
+    insertMode: 'insert',
+  },
+  
+  bracketPairColorization: {
+    enabled: true,
+  },
+  guides: {
+    bracketPairs: true,
+    indentation: true,
+  },
+  
+  find: {
+    addExtraSpaceOnTop: true,
+    autoFindInSelection: 'multiline',
+    seedSearchStringFromSelection: 'selection',
+  },
+  
+  renderWhitespace: 'selection',
+  renderControlCharacters: false,
+  renderLineHighlight: 'line',
+  renderLineHighlightOnlyWhenFocus: false,
+  
+  accessibilitySupport: 'auto',
+  ariaLabel: 'Code Editor',
+};
+
+export const darkTheme: monaco.editor.IStandaloneThemeData = {
+  base: 'vs-dark',
+  inherit: true,
+  rules: [
+    { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
+    { token: 'keyword', foreground: 'C586C0' },
+    { token: 'string', foreground: 'CE9178' },
+    { token: 'number', foreground: 'B5CEA8' },
+    { token: 'function', foreground: 'DCDCAA' },
+    { token: 'variable', foreground: '9CDCFE' },
+    { token: 'type', foreground: '4EC9B0' },
+    { token: 'class', foreground: '4EC9B0' },
+    { token: 'interface', foreground: '4EC9B0' },
+    { token: 'enum', foreground: '4EC9B0' },
+    { token: 'operator', foreground: 'D4D4D4' },
+    { token: 'regexp', foreground: 'D16969' },
+    { token: 'delimiter', foreground: 'DCDCAA' },
+  ],
+  colors: {
+    'editor.background': '#1E1E1E',
+    'editor.foreground': '#D4D4D4',
+    'editor.lineHighlightBackground': '#2A2A2A',
+    'editorCursor.foreground': '#AEAFAD',
+    'editor.selectionBackground': '#264F78',
+    'editor.inactiveSelectionBackground': '#3A3D41',
+    'editorIndentGuide.background': '#404040',
+    'editorIndentGuide.activeBackground': '#707070',
+    'editor.findMatchBackground': '#515C6A',
+    'editor.findMatchHighlightBackground': '#EA5C0055',
+  },
+};
+
+export function setupMonacoEditor() {
+  monaco.editor.defineTheme('oqool-dark', darkTheme);
+  monaco.editor.setTheme('oqool-dark');
+  
+  monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+    target: monaco.languages.typescript.ScriptTarget.ES2020,
+    allowNonTsExtensions: true,
+    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+    module: monaco.languages.typescript.ModuleKind.CommonJS,
+    noEmit: true,
+    esModuleInterop: true,
+    jsx: monaco.languages.typescript.JsxEmit.React,
+    reactNamespace: 'React',
+    allowJs: true,
+    typeRoots: ['node_modules/@types'],
+  });
+  
+  monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+    noSemanticValidation: false,
+    noSyntaxValidation: false,
+  });
+}
+
+
+انتهى   الجزء الاول 
+
+
+
+
+
+📁 src/features/terminal/pty-manager.ts
+typescriptexport interface Terminal {
+  id: string;
+  pid?: number;
+  cwd: string;
+  title: string;
+  isActive: boolean;
+}
+
+export class PTYManager {
+  private terminals: Map<string, Terminal> = new Map();
+  private activeTerminalId: string | null = null;
+
+  async createTerminal(cwd?: string): Promise<string> {
+    const terminalId = `terminal-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    try {
+      const result = await window.electron.invoke('terminal:create', terminalId, cwd);
+
+      if (result.success) {
+        const terminal: Terminal = {
+          id: terminalId,
+          cwd: cwd || process.cwd(),
+          title: `Terminal ${this.terminals.size + 1}`,
+          isActive: true,
+        };
+
+        this.terminals.set(terminalId, terminal);
+        this.activeTerminalId = terminalId;
+
+        return terminalId;
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to create terminal:', error);
+      throw error;
+    }
+  }
+
+  async writeToTerminal(terminalId: string, data: string): Promise<void> {
+    const terminal = this.terminals.get(terminalId);
+    if (!terminal) {
+      throw new Error(`Terminal ${terminalId} not found`);
+    }
+
+    try {
+      const result = await window.electron.invoke('terminal:write', terminalId, data);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to write to terminal:', error);
+      throw error;
+    }
+  }
+
+  async resizeTerminal(terminalId: string, cols: number, rows: number): Promise<void> {
+    const terminal = this.terminals.get(terminalId);
+    if (!terminal) {
+      throw new Error(`Terminal ${terminalId} not found`);
+    }
+
+    try {
+      const result = await window.electron.invoke('terminal:resize', terminalId, cols, rows);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to resize terminal:', error);
+      throw error;
+    }
+  }
+
+  async killTerminal(terminalId: string): Promise<void> {
+    const terminal = this.terminals.get(terminalId);
+    if (!terminal) {
+      return;
+    }
+
+    try {
+      const result = await window.electron.invoke('terminal:kill',Wiederholenاصاكملtypescript      const result = await window.electron.invoke('terminal:kill', terminalId);
+
+      if (result.success) {
+        this.terminals.delete(terminalId);
+
+        if (this.activeTerminalId === terminalId) {
+          const remainingTerminals = Array.from(this.terminals.keys());
+          this.activeTerminalId = remainingTerminals.length > 0 ? remainingTerminals[0] : null;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to kill terminal:', error);
+      throw error;
+    }
+  }
+
+  getTerminal(terminalId: string): Terminal | undefined {
+    return this.terminals.get(terminalId);
+  }
+
+  getAllTerminals(): Terminal[] {
+    return Array.from(this.terminals.values());
+  }
+
+  setActiveTerminal(terminalId: string): void {
+    const terminal = this.terminals.get(terminalId);
+    if (terminal) {
+      this.activeTerminalId = terminalId;
+    }
+  }
+
+  getActiveTerminal(): Terminal | null {
+    if (!this.activeTerminalId) {
+      return null;
+    }
+    return this.terminals.get(this.activeTerminalId) || null;
+  }
+
+  updateTerminalTitle(terminalId: string, title: string): void {
+    const terminal = this.terminals.get(terminalId);
+    if (terminal) {
+      terminal.title = title;
+    }
+  }
+
+  onTerminalData(callback: (terminalId: string, data: string) => void): () => void {
+    return window.electron.on('terminal:data', ({ terminalId, data }) => {
+      callback(terminalId, data);
+    });
+  }
+
+  onTerminalExit(callback: (terminalId: string, exitCode: number) => void): () => void {
+    return window.electron.on('terminal:exit', ({ terminalId, exitCode }) => {
+      this.terminals.delete(terminalId);
+      callback(terminalId, exitCode);
+    });
+  }
+}
+
+📁 src/features/git/git-client.ts
+typescriptexport interface GitStatus {
+  branch: string;
+  ahead: number;
+  behind: number;
+  staged: string[];
+  modified: string[];
+  untracked: string[];
+  conflicted: string[];
+}
+
+export interface GitCommit {
+  hash: string;
+  author: string;
+  email: string;
+  date: Date;
+  message: string;
+  refs?: string;
+}
+
+export interface GitBranch {
+  name: string;
+  current: boolean;
+  remote?: string;
+}
+
+export class GitClient {
+  private workspacePath: string;
+
+  constructor(workspacePath: string) {
+    this.workspacePath = workspacePath;
+  }
+
+  async getStatus(): Promise<GitStatus> {
+    try {
+      const result = await window.electron.invoke('git:status', this.workspacePath);
+
+      if (result.success) {
+        return result.status;
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to get git status:', error);
+      throw error;
+    }
+  }
+
+  async commit(message: string, files?: string[]): Promise<void> {
+    try {
+      const result = await window.electron.invoke('git:commit', this.workspacePath, message, files);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to commit:', error);
+      throw error;
+    }
+  }
+
+  async push(remote?: string, branch?: string): Promise<void> {
+    try {
+      const result = await window.electron.invoke('git:push', this.workspacePath, remote, branch);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to push:', error);
+      throw error;
+    }
+  }
+
+  async pull(remote?: string, branch?: string): Promise<void> {
+    try {
+      const result = await window.electron.invoke('git:pull', this.workspacePath, remote, branch);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to pull:', error);
+      throw error;
+    }
+  }
+
+  async getDiff(filePath?: string, staged?: boolean): Promise<string> {
+    try {
+      const result = await window.electron.invoke('git:diff', this.workspacePath, filePath, staged);
+
+      if (result.success) {
+        return result.diff;
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to get diff:', error);
+      throw error;
+    }
+  }
+
+  async getBranches(): Promise<GitBranch[]> {
+    try {
+      const result = await window.electron.invoke('git:branches', this.workspacePath);
+
+      if (result.success) {
+        return result.branches;
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to get branches:', error);
+      throw error;
+    }
+  }
+
+  async createBranch(branchName: string, checkout?: boolean): Promise<void> {
+    try {
+      const result = await window.electron.invoke('git:create-branch', this.workspacePath, branchName, checkout);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to create branch:', error);
+      throw error;
+    }
+  }
+
+  async checkoutBranch(branchName: string): Promise<void> {
+    try {
+      const result = await window.electron.invoke('git:checkout', this.workspacePath, branchName);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to checkout branch:', error);
+      throw error;
+    }
+  }
+
+  async deleteBranch(branchName: string, force?: boolean): Promise<void> {
+    try {
+      const result = await window.electron.invoke('git:delete-branch', this.workspacePath, branchName, force);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to delete branch:', error);
+      throw error;
+    }
+  }
+
+  async getLog(limit?: number): Promise<GitCommit[]> {
+    try {
+      const result = await window.electron.invoke('git:log', this.workspacePath, limit);
+
+      if (result.success) {
+        return result.commits;
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to get log:', error);
+      throw error;
+    }
+  }
+
+  async stageFiles(files: string[]): Promise<void> {
+    try {
+      const result = await window.electron.invoke('git:stage', this.workspacePath, files);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to stage files:', error);
+      throw error;
+    }
+  }
+
+  async unstageFiles(files: string[]): Promise<void> {
+    try {
+      const result = await window.electron.invoke('git:unstage', this.workspacePath, files);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to unstage files:', error);
+      throw error;
+    }
+  }
+
+  async discardChanges(files: string[]): Promise<void> {
+    try {
+      const result = await window.electron.invoke('git:discard', this.workspacePath, files);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to discard changes:', error);
+      throw error;
+    }
+  }
+}
+
+
+
+
+
+📁 electron/ipc/git.ts
+typescriptimport { ipcMain, IpcMainInvokeEvent } from 'electron';
+import simpleGit, { SimpleGit } from 'simple-git';
+import { logger } from '../services/logger';
+
+const gitInstances = new Map<string, SimpleGit>();
+
+function getGitInstance(workspacePath: string): SimpleGit {
+  if (!gitInstances.has(workspacePath)) {
+    gitInstances.set(workspacePath, simpleGit(workspacePath));
+  }
+  return gitInstances.get(workspacePath)!;
+}
+
+export function gitHandlers() {
+  ipcMain.handle('git:status', async (_event: IpcMainInvokeEvent, workspacePath: string) => {
+    try {
+      logger.debug('Getting git status for:', workspacePath);
+      const git = getGitInstance(workspacePath);
+      const status = await git.status();
+
+      return {
+        success: true,
+        status: {
+          branch: status.current || 'main',
+          ahead: status.ahead,
+          behind: status.behind,
+          staged: status.staged,
+          modified: status.modified,
+          untracked: status.not_added,
+          conflicted: status.conflicted,
+        },
+      };
+    } catch (error: any) {
+      logger.error('Error getting git status:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:commit', async (_event: IpcMainInvokeEvent, workspacePath: string, message: string, files?: string[]) => {
+    try {
+      logger.debug('Committing changes:', workspacePath);
+      const git = getGitInstance(workspacePath);
+
+      if (files && files.length > 0) {
+        await git.add(files);
+      }
+
+      await git.commit(message);
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error committing:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:push', async (_event: IpcMainInvokeEvent, workspacePath: string, remote?: string, branch?: string) => {
+    try {
+      logger.debug('Pushing changes:', workspacePath);
+      const git = getGitInstance(workspacePath);
+
+      if (remote && branch) {
+        await git.push(remote, branch);
+      } else {
+        await git.push();
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error pushing:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:pull', async (_event: IpcMainInvokeEvent, workspacePath: string, remote?: string, branch?: string) => {
+    try {
+      logger.debug('Pulling changes:', workspacePath);
+      const git = getGitInstance(workspacePath);
+
+      if (remote && branch) {
+        await git.pull(remote, branch);
+      } else {
+        await git.pull();
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error pulling:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:diff', async (_event: IpcMainInvokeEvent, workspacePath: string, filePath?: string, staged?: boolean) => {
+    try {
+      logger.debug('Getting diff:', workspacePath);
+      const git = getGitInstance(workspacePath);
+
+      let diff: string;
+      if (staged) {
+        diff = await git.diff(['--cached', filePath || '']);
+      } else {
+        diff = await git.diff([filePath || '']);
+      }
+
+      return { success: true, diff };
+    } catch (error: any) {
+      logger.error('Error getting diff:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:branches', async (_event: IpcMainInvokeEvent, workspacePath: string) => {
+    try {
+      logger.debug('Getting branches:', workspacePath);
+      const git = getGitInstance(workspacePath);
+      const branchSummary = await git.branchLocal();
+
+      const branches = branchSummary.all.map((name) => ({
+        name,
+        current: name === branchSummary.current,
+      }));
+
+      return { success: true, branches };
+    } catch (error: any) {
+      logger.error('Error getting branches:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:create-branch', async (_event: IpcMainInvokeEvent, workspacePath: string, branchName: string, checkout?: boolean) => {
+    try {
+      logger.debug('Creating branch:', branchName);
+      const git = getGitInstance(workspacePath);
+
+      if (checkout) {
+        await git.checkoutLocalBranch(branchName);
+      } else {
+        await git.branch([branchName]);
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error creating branch:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:checkout', async (_event: IpcMainInvokeEvent, workspacePath: string, branchName: string) => {
+    try {
+      logger.debug('Checking out branch:', branchName);
+      const git = getGitInstance(workspacePath);
+      await git.checkout(branchName);
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error checking out branch:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:delete-branch', async (_event: IpcMainInvokeEvent, workspacePath: string, branchName: string, force?: boolean) => {
+    try {
+      logger.debug('Deleting branch:', branchName);
+      const git = getGitInstance(workspacePath);
+      await git.deleteLocalBranch(branchName, force);
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error deleting branch:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:log', async (_event: IpcMainInvokeEvent, workspacePath: string, limit?: number) => {
+    try {
+      logger.debug('Getting log:', workspacePath);
+      const git = getGitInstance(workspacePath);
+      const log = await git.log({ maxCount: limit || 50 });
+
+      const commits = log.all.map((commit) => ({
+        hash: commit.hash,
+        author: commit.author_name,
+        email: commit.author_email,
+        date: new Date(commit.date),
+        message: commit.message,
+        refs: commit.refs,
+      }));
+
+      return { success: true, commits };
+    } catch (error: any) {
+      logger.error('Error getting log:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:stage', async (_event: IpcMainInvokeEvent, workspacePath: string, files: string[]) => {
+    try {
+      logger.debug('Staging files:', files);
+      const git = getGitInstance(workspacePath);
+      await git.add(files);
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error staging files:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:unstage', async (_event: IpcMainInvokeEvent, workspacePath: string, files: string[]) => {
+    try {
+      logger.debug('Unstaging files:', files);
+      const git = getGitInstance(workspacePath);
+      await git.reset(['HEAD', ...files]);
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error unstaging files:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('git:discard', async (_event: IpcMainInvokeEvent, workspacePath: string, files: string[]) => {
+    try {
+      logger.debug('Discarding changes:', files);
+      const git = getGitInstance(workspacePath);
+      await git.checkout(['--', ...files]);
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error discarding changes:', error);
+      return { success: false, error: error.message };
+    }
+  });
+}
+
+
+
+
+
+📁 src/stores/editor-store.ts
+typescriptimport { create } from 'zustand';
+import * as monaco from 'monaco-editor';
+
+export interface EditorFile {
+  path: string;
+  content: string;
+  language: string;
+  isDirty: boolean;
+  isActive: boolean;
+  model?: monaco.editor.ITextModel;
+  viewState?: monaco.editor.ICodeEditorViewState;
+}
+
+interface EditorStore {
+  files: Map<string, EditorFile>;
+  activeFilePath: string | null;
+  editor: monaco.editor.IStandaloneCodeEditor | null;
+
+  setEditor: (editor: monaco.editor.IStandaloneCodeEditor) => void;
+  openFile: (path: string, content: string, language: string) => void;
+  closeFile: (path: string) => void;
+  setActiveFile: (path: string) => void;
+  updateFileContent: (path: string, content: string) => void;
+  saveFile: (path: string) => Promise<void>;
+  saveAllFiles: () => Promise<void>;
+  getFile: (path: string) => EditorFile | undefined;
+  getActiveFile: () => EditorFile | null;
+  isDirty: (path: string) => boolean;
+  hasUnsavedChanges: () => boolean;
+}
+
+export const useEditorStore = create<EditorStore>((set, get) => ({
+  files: new Map(),
+  activeFilePath: null,
+  editor: null,
+
+  setEditor: (editor) => {
+    set({ editor });
+  },
+
+  openFile: (path, content, language) => {
+    const { files, editor } = get();
+
+    if (files.has(path)) {
+      get().setActiveFile(path);
+      return;
+    }
+
+    const model = monaco.editor.createModel(content, language, monaco.Uri.file(path));
+
+    const file: EditorFile = {
+      path,
+      content,
+      language,
+      isDirty: false,
+      isActive: true,
+      model,
+    };
+
+    const newFiles = new Map(files);
+
+    newFiles.forEach((f) => {
+      f.isActive = false;
+      if (f.model && editor) {
+        f.viewState = editor.saveViewState() || undefined;
+      }
+    });
+
+    newFiles.set(path, file);
+
+    if (editor) {
+      editor.setModel(model);
+    }
+
+    set({ files: newFiles, activeFilePath: path });
+  },
+
+  closeFile: (path) => {
+    const { files, activeFilePath } = get();
+    const file = files.get(path);
+
+    if (!file) return;
+
+    if (file.model) {
+      file.model.dispose();
+    }
+
+    const newFiles = new Map(files);
+    newFiles.delete(path);
+
+    let newActivePath = activeFilePath;
+
+    if (activeFilePath === path) {
+      const remainingFiles = Array.from(newFiles.keys());
+      newActivePath = remainingFiles.length > 0 ? remainingFiles[0] : null;
+
+      if (newActivePath) {
+        get().setActiveFile(newActivePath);
+      }
+    }
+
+    set({ files: newFiles, activeFilePath: newActivePath });
+  },
+
+  setActiveFile: (path) => {
+    const { files, editor } = get();
+    const file = files.get(path);
+
+    if (!file || !editor) return;
+
+    const newFiles = new Map(files);
+
+    newFiles.forEach((f) => {
+      if (f.isActive && f.model) {
+        f.viewState = editor.saveViewState() || undefined;
+      }
+      f.isActive = false;
+    });
+
+    file.isActive = true;
+
+    editor.setModel(file.model || null);
+
+    if (file.viewState) {
+      editor.restoreViewState(file.viewState);
+    }
+
+    editor.focus();
+
+    set({ files: newFiles, activeFilePath: path });
+  },
+
+  updateFileContent: (path, content) => {
+    const { files } = get();
+    const file = files.get(path);
+
+    if (!file) return;
+
+    const newFiles = new Map(files);
+    const updatedFile = { ...file, isDirty: file.content !== content };
+    newFiles.set(path, updatedFile);
+
+    set({ files: newFiles });
+  },
+
+  saveFile: async (path) => {
+    const { files, editor } = get();
+    const file = files.get(path);
+
+    if (!file || !file.model) return;
+
+    try {
+      const content = file.model.getValue();
+
+      const result = await window.electron.invoke('fs:write', path, content);
+
+      if (result.success) {
+        const newFiles = new Map(files);
+        const updatedFile = { ...file, content, isDirty: false };
+        newFiles.set(path, updatedFile);
+
+        set({ files: newFiles });
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to save file:', error);
+      throw error;
+    }
+  },
+
+  saveAllFiles: async () => {
+    const { files } = get();
+    const dirtyFiles = Array.from(files.values()).filter((f) => f.isDirty);
+
+    const savePromises = dirtyFiles.map((file) => get().saveFile(file.path));
+
+    await Promise.all(savePromises);
+  },
+
+  getFile: (path) => {
+    return get().files.get(path);
+  },
+
+  getActiveFile: () => {
+    const { activeFilePath, files } = get();
+    if (!activeFilePath) return null;
+    return files.get(activeFilePath) || null;
+  },
+
+  isDirty: (path) => {
+    const file = get().files.get(path);
+    return file?.isDirty || false;
+  },
+
+  hasUnsavedChanges: () => {
+    const { files } = get();
+    return Array.from(files.values()).some((f) => f.isDirty);
+  },
+}));
+
+
+
+
+
+
+📁 src/stores/file-store.ts
+typescriptimport { create } from 'zustand';
+
+export interface FileNode {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  isExpanded?: boolean;
+  children?: FileNode[];
+  size?: number;
+  modified?: Date;
+}
+
+interface FileStore {
+  rootPath: string | null;
+  fileTree: FileNode[];
+  selectedPath: string | null;
+  expandedPaths: Set<string>;
+  watcherId: string | null;
+
+  setRootPath: (path: string) => void;
+  loadDirectory: (path: string) => Promise<void>;
+  toggleDirectory: (path: string) => void;
+  selectFile: (path: string) => void;
+  refreshDirectory: (path: string) => Promise<void>;
+  createFile: (dirPath: string, fileName: string) => Promise<void>;
+  createDirectory: (parentPath: string, dirName: string) => Promise<void>;
+  deleteFile: (path: string) => Promise<void>;
+  renameFile: (oldPath: string, newPath: string) => Promise<void>;
+  setupWatcher: (path: string) => Promise<void>;
+  handleWatcherEvent: (event: { type: string; path: string }) => void;
+}
+
+export const useFileStore = create<FileStore>((set, get) => ({
+  rootPath: null,
+  fileTree: [],
+  selectedPath: null,
+  expandedPaths: new Set(),
+  watcherId: null,
+
+  setRootPath: (path) => {
+    set({ rootPath: path });
+    get().loadDirectory(path);
+    get().setupWatcher(path);
+  },
+
+  loadDirectory: async (path) => {
+    try {
+      const result = await window.electron.invoke('fs:readdir', path);
+
+      if (result.success) {
+        const nodes: FileNode[] = result.items
+          .sort((a: any, b: any) => {
+            if (a.isDirectory && !b.isDirectory) return -1;
+            if (!a.isDirectory && b.isDirectory) return 1;
+            return a.name.localeCompare(b.name);
+          })
+          .map((item: any) => ({
+            name: item.name,
+            path: item.path,
+            isDirectory: item.isDirectory,
+            isExpanded: false,
+            size: item.size,
+            modified: new Date(item.modified),
+          }));
+
+        if (path === get().rootPath) {
+          set({ fileTree: nodes });
+        } else {
+          const updateTree = (tree: FileNode[]): FileNode[] => {
+            return tree.map((node) => {
+              if (node.path === path) {
+                return { ...node, children: nodes, isExpanded: true };
+              } else if (node.children) {
+                return { ...node, children: updateTree(node.children) };
+              }
+              return node;
+            });
+          };
+
+          set({ fileTree: updateTree(get().fileTree) });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load directory:', error);
+    }
+  },
+
+  toggleDirectory: (path) => {
+    const { fileTree, expandedPaths } = get();
+
+    const findAndToggle = (nodes: FileNode[]): FileNode[] => {
+      return nodes.map((node) => {
+        if (node.path === path && node.isDirectory) {
+          const isExpanded = !node.isExpanded;
+
+          if (isExpanded) {
+            expandedPaths.add(path);
+            if (!node.children) {
+              get().loadDirectory(path);
+            }
+          } else {
+            expandedPaths.delete(path);
+          }
+
+          return { ...node, isExpanded };
+        } else if (node.children) {
+          return { ...node, children: findAndToggle(node.children) };
+        }
+        return node;
+      });
+    };
+
+    set({ fileTree: findAndToggle(fileTree), expandedPaths });
+  },
+
+  selectFile: (path) => {
+    set({ selectedPath: path });
+  },
+
+  refreshDirectory: async (path) => {
+    await get().loadDirectory(path);
+  },
+
+  createFile: async (dirPath, fileName) => {
+    try {
+      const filePath = `${dirPath}/${fileName}`;
+      const result = await window.electron.invoke('fs:write', filePath, '');
+
+      if (result.success) {
+        await get().refreshDirectory(dirPath);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to create file:', error);
+      throw error;
+    }
+  },
+
+  createDirectory: async (parentPath, dirName) => {
+    try {
+      const dirPath = `${parentPath}/${dirName}`;
+      const result = await window.electron.invoke('fs:mkdir', dirPath);
+
+      if (result.success) {
+        await get().refreshDirectory(parentPath);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to create directory:', error);
+      throw error;
+    }
+  },
+
+  deleteFile: async (path) => {
+    try {
+      const result = await window.electron.invoke('fs:delete', path);
+
+      if (result.success) {
+        const parentPath = path.substring(0, path.lastIndexOf('/'));
+        await get().refreshDirectory(parentPath);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to delete file:', error);
+      throw error;
+    }
+  },
+
+  renameFile: async (oldPath, newPath) => {
+    try {
+      const result = await window.electron.invoke('fs:rename', oldPath, newPath);
+
+      if (result.success) {
+        const parentPath = oldPath.substring(0, oldPath.lastIndexOf('/'));
+        await get().refreshDirectory(parentPath);
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to rename file:', error);
+      throw error;
+    }
+  },
+
+  setupWatcher: async (path) => {
+    try {
+      const watcherId = `watcher-${Date.now()}`;
+      const result = await window.electron.invoke('fs:watch', path, watcherId);
+
+      if (result.success) {
+        set({ watcherId });
+
+        window.electron.on('fs:watcher-event', (event) => {
+          get().handleWatcherEvent(event);
+        });
+      }
+    } catch (error) {
+      console.error('Failed to setup watcher:', error);
+    }
+  },
+
+  handleWatcherEvent: (event) => {
+    const { type, path } = event;
+    const parentPath = path.substring(0, path.lastIndexOf('/'));
+
+    switch (type) {
+      case 'add':
+      case 'unlink':
+      case 'addDir':
+      case 'unlinkDir':
+        get().refreshDirectory(parentPath);
+        break;
+      case 'change':
+        break;
+    }
+  },
+}));
+
+
+
+
+
+📁 src/services/file-service.ts
+typescriptexport class FileService {
+  async readFile(path: string): Promise<string> {
+    try {
+      const result = await window.electron.invoke('fs:read', path);
+
+      if (result.success) {
+        return result.content;
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to read file:', error);
+      throw error;
+    }
+  }
+
+  async writeFile(path: string, content: string): Promise<void> {
+    try {
+      const result = await window.electron.invoke('fs:write', path, content);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to write file:', error);
+      throw error;
+    }
+  }
+
+  async readDirectory(path: string): Promise<any[]> {
+    try {
+      const result = await window.electron.invoke('fs:readdir', path);
+
+      if (result.success) {
+        return result.items;
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to read directory:', error);
+      throw error;
+    }
+  }
+
+  async createDirectory(path: string): Promise<void> {
+    try {
+      const result = await window.electron.invoke('fs:mkdir', path);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to create directory:', error);
+      throw error;
+    }
+  }
+
+  async deleteFile(path: string): Promise<void> {
+    try {
+      const result = await window.electron.invoke('fs:delete', path);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to delete file:', error);
+      throw error;
+    }
+  }
+
+  async renameFile(oldPath: string, newPath: string): Promise<void> {
+    try {
+      const result = await window.electron.invoke('fs:rename', oldPath, newPath);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to rename file:', error);
+      throw error;
+    }
+  }
+
+  async fileExists(path: string): Promise<boolean> {
+    try {
+      const result = await window.electron.invoke('fs:exists', path);
+
+      if (result.success) {
+        return result.exists;
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to check file existence:', error);
+      throw error;
+    }
+  }
+
+  getLanguageFromExtension(filename: string): string {
+    const ext = filename.split('.').pop()?.toLowerCase();
+
+    const languageMap: Record<string, string> = {
+      js: 'javascript',
+      jsx: 'javascript',
+      ts: 'typescript',
+      tsx: 'typescript',
+      py: 'python',
+      java: 'java',
+      cpp: 'cpp',
+      c: 'c',
+      cs: 'csharp',
+      go: 'go',
+      rs: 'rust',
+      php: 'php',
+      rb: 'ruby',
+      swift: 'swift',
+      kt: 'kotlin',
+      html: 'html',
+      css: 'css',
+      scss: 'scss',
+      sass: 'sass',
+      less: 'less',
+      json: 'json',
+      xml: 'xml',
+      yaml: 'yaml',
+      yml: 'yaml',
+      md: 'markdown',
+      sql: 'sql',
+      sh: 'shell',
+      bash: 'shell',
+      ps1: 'powershell',
+      dockerfile: 'dockerfile',
+    };
+
+    return languageMap[ext || ''] || 'plaintext';
+  }
+}
+
+export const fileService = new FileService();
+
+
+
+
+
+
+
+📁 src/services/ai-service.ts
+typescriptexport interface AIPersonality {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  color: string;
+}
+
+export const AI_PERSONALITIES: AIPersonality[] = [
+  {
+    id: 'alex',
+    name: 'Alex - المعماري',
+    description: 'خبير في تصميم الأنظمة والأنماط المعمارية',
+    icon: '🏗️',
+    color: '#3B82F6',
+  },
+  {
+    id: 'sarah',
+    name: 'Sarah - المطورة',
+    description: 'مطورة Full-stack محترفة تكتب كود نظيف',
+    icon: '💻',
+    color: '#10B981',
+  },
+  {
+    id: 'mike',
+    name: 'Mike - المراجع',
+    description: 'خبير في مراجعة الكود وتحسين الجودة',
+    icon: '🔍',
+    color: '#F59E0B',
+  },
+  {
+    id: 'guardian',
+    name: 'Guardian - الحارس',
+    description: 'خبير أمن سيبراني يحمي من الثغرات',
+    icon: '🛡️',
+    color: '#EF4444',
+  },
+  {
+    id: 'olivia',
+    name: 'Olivia - المختبرة',
+    description: 'خبيرة في كتابة الاختبارات الشاملة',
+    icon: '🧪',
+    color: '#8B5CF6',
+  },
+  {
+    id: 'tom',
+    name: 'Tom - المحسّن',
+    description: 'خبير في تحسين الأداء والكفاءة',
+    icon: '⚡',
+    color: '#F97316',
+  },
+  {
+    id: 'emma',
+    name: 'Emma - الموثّقة',
+    description: 'خبيرة في كتابة التوثيق الواضح',
+    icon: '📚',
+    color: '#06B6D4',
+  },
+  {
+    id: 'max',
+    name: 'Max - المعلم',
+    description: 'معلم صبور يشرح المفاهيم بوضوح',
+    icon: '🎓',
+    color: '#EC4899',
+  },
+];
+
+export class AIService {
+  async callAI(prompt: string, personality?: string, model?: string): Promise<string> {
+    try {
+      const result = await window.electron.invoke('ai:call', prompt, personality, model);
+
+      if (result.success) {
+        return result.response;
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to call AI:', error);
+      throw error;
+    }
+  }
+
+  async streamAI(
+    prompt: string,
+    onChunk: (text: string) => void,
+    onComplete: () => void,
+    onError: (error: string) => void,
+    personality?: string
+  ): Promise<void> {
+    const requestId = `stream-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    const cleanup = window.electron.on('ai:stream-data', ({ requestId: id, type, data, error }) => {
+      if (id !== requestId) return;
+
+      switch (type) {
+        case 'text':
+          onChunk(data);
+          break;
+        case 'end':
+          onComplete();
+          cleanup();
+          break;
+        case 'error':
+          onError(error);
+          cleanup();
+          break;
+      }
+    });
+
+    try {
+      const result = await window.electron.invoke('ai:stream', requestId, prompt, personality);
+
+      if (!result.success) {
+        cleanup();
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      cleanup();
+      console.error('Failed to stream AI:', error);
+      throw error;
+    }
+  }
+
+  async getInlineSuggestion(code: string, language: string, position: { line: number; column: number }): Promise<string> {
+    try {
+      const result = await window.electron.invoke('ai:inline-suggest', code, language, position);
+
+      if (result.success) {
+        return result.suggestion;
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error) {
+      console.error('Failed to get inline suggestion:', error);
+      throw error;
+    }
+  }
+
+  getPersonality(id: string): AIPersonality | undefined {
+    return AI_PERSONALITIES.find((p) => p.id === id);
+  }
+
+  getAllPersonalities(): AIPersonality[] {
+    return AI_PERSONALITIES;
+  }
+}
+
+export const aiService = new AIService();
+
+📁 electron/ipc/settings.ts
+typescriptimport { ipcMain, IpcMainInvokeEvent } from 'electron';
+import fs from 'fs-extra';
+import path from 'path';
+import { app } from 'electron';
+import { logger } from '../services/logger';
+
+let settings: Record<string, any> = {};
+let settingsPath: string;
+
+function initializeSettings() {
+  const userDataPath = app.getPath('userData');
+  settingsPath = path.join(userDataPath, 'settings.json');
+
+  if (fs.existsSync(settingsPath)) {
+    try {
+      const data = fs.readFileSync(settingsPath, 'utf-8');
+      settings = JSON.parse(data);
+    } catch (error) {
+      logger.error('Failed to load settings:', error);
+      settings = getDefaultSettings();
+    }
+  } else {
+    settings = getDefaultSettings();
+    saveSettingsToFile();
+  }
+}
+
+function getDefaultSettings(): Record<string, any> {
+  return {
+    editor: {
+      fontSize: 14,
+      fontFamily: 'Fira Code',
+      lineHeight: 21,
+      tabSize: 2,
+      insertSpaces: true,
+      wordWrap: 'on',
+      minimap: true,
+    },
+    theme: {
+      id: 'oqool-dark',
+      name: 'Oqool Dark',
+    },
+    terminal: {
+      fontSize: 14,
+      fontFamily: 'Fira Code',
+      shell: process.platform === 'win32' ? 'powershell.exe' : 'bash',
+    },
+    ai: {
+      defaultPersonality: 'sarah',
+      model: 'claude-sonnet-4-20250514',
+      inlineSuggestionsEnabled: true,
+    },
+    git: {
+      autoFetch: true,
+      confirmSync: true,
+    },
+    locale: 'ar',
+  };
+}
+
+function saveSettingsToFile() {
+  try {
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+  } catch (error) {
+    logger.error('Failed to save settings:', error);
+  }
+}
+
+export function settingsHandlers() {
+  initializeSettings();
+
+  ipcMain.handle('settings:get', async (_event: IpcMainInvokeEvent, key: string) => {
+    try {
+      const keys = key.split('.');
+      let value: any = settings;
+
+      for (const k of keys) {
+        value = value?.[k];
+      }
+
+      return { success: true, value };
+    } catch (error: any) {
+      logger.error('Error getting setting:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('settings:set', async (_event: IpcMainInvokeEvent, key: string, value: any) => {
+    try {
+      const keys = key.split('.');
+      let obj: any = settings;
+
+      for (let i = 0; i < keys.length - 1; i++) {
+        if (!obj[keys[i]]) {
+          obj[keys[i]] = {};
+        }
+        obj = obj[keys[i]];
+      }
+
+      obj[keys[keys.length - 1]] = value;
+
+      saveSettingsToFile();
+
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Error setting setting:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('settings:getAll', async (_event: IpcMainInvokeEvent) => {
+    try {
+      return { success: true, settings };
+    } catch (error: any) {
+      logger.error('Error getting all settings:', error);
+      return { success: false, error: error.message };
+    }
+  });
+}

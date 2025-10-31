@@ -1,0 +1,28 @@
+.menu-bar {
+  height: 30px;
+  background: #3c3c3c;
+  display: flex;
+  align-items: center;
+  padding: 0 0.5rem;
+  border-bottom: 1px solid #1e1e1e;
+  user-select: none;
+}
+
+.menu-item {
+  position: relative;
+}
+
+.menu-button {
+  background: none;
+  border: none;
+  color: #cccccc;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-radius: 3px;
+}
+
+.menu-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}

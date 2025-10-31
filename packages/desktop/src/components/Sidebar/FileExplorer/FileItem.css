@@ -1,0 +1,40 @@
+.file-item {
+  user-select: none;
+}
+
+.file-item-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.file-item-label:hover {
+  background: #2a2d2e;
+}
+
+.folder-arrow {
+  font-size: 0.7rem;
+  color: #cccccc;
+  width: 12px;
+  display: inline-block;
+}
+
+.file-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.file-name {
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #cccccc;
+}
+
+.file-item-label.directory .file-name {
+  font-weight: 500;
+}
