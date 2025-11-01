@@ -1,18 +1,168 @@
-.terminal-container {
-  width: 100%;
-  height: 100%;
+.terminal {
+  height: 200px;
   background: #1e1e1e;
-  padding: 0.5rem;
+  border-top: 1px solid #2d2d30;
+  display: flex;
+  flex-direction: column;
 }
 
-.terminal-container .xterm {
-  height: 100%;
+.terminal-header {
+  height: 35px;
+  background: #252526;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 8px;
+  border-bottom: 1px solid #2d2d30;
 }
 
-.terminal-container .xterm-viewport {
+.terminal-tabs {
+  display: flex;
+  gap: 2px;
+  flex: 1;
+}
+
+.terminal-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #1e1e1e;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.terminal-tab:hover {
+  background: #2d2d30;
+}
+
+.terminal-tab.active {
+  background: #1e1e1e;
+  border-bottom: 2px solid #007acc;
+}
+
+.terminal-tab-icon {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  color: #cccccc;
+}
+
+.terminal-tab-name {
+  color: #cccccc;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.terminal-tab-close {
+  background: transparent;
+  border: none;
+  color: #858585;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  transition: all 0.2s;
+}
+
+.terminal-tab-close:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.terminal-title {
+  color: #cccccc;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.terminal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.terminal-btn {
+  background: transparent;
+  border: none;
+  color: #cccccc;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.terminal-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.terminal-content {
+  flex: 1;
+  padding: 8px;
   overflow-y: auto;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.terminal-container .xterm-screen {
-  cursor: text;
+.terminal-line {
+  margin-bottom: 4px;
+}
+
+.terminal-mt {
+  margin-top: 8px;
+}
+
+.prompt-user {
+  color: #6a9955;
+}
+
+.prompt-separator {
+  color: #cccccc;
+}
+
+.prompt-path {
+  color: #569cd6;
+}
+
+.prompt-dollar {
+  color: #cccccc;
+}
+
+.command-text {
+  color: #ce9178;
+}
+
+.success-icon {
+  color: #6a9955;
+}
+
+.success-text {
+  color: #6a9955;
+}
+
+.info-text {
+  color: #4fc3f7;
+}
+
+.cursor-blink {
+  color: #cccccc;
+  animation: blink 1s infinite;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }

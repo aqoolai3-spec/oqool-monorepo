@@ -1,178 +1,259 @@
-import { ipcMain, IpcMainInvokeEvent } from 'electron';
-import fs from 'fs-extra';
-import path from 'path';
-import chokidar from 'chokidar';
-import { logger } from '../services/logger';
+import { ipcMain, dialog, BrowserWindow } from 'electron';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
-const watchers = new Map<string, chokidar.FSWatcher>();
+interface FileInfo {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  size?: number;
+  modified?: Date;
+}
 
-export function fileSystemHandlers() {
-  ipcMain.handle('fs:read', async (_event: IpcMainInvokeEvent, filePath: string) => {
-    try {
-      logger.debug('Reading file:', filePath);
-      const content = await fs.readFile(filePath, 'utf-8');
-      return { success: true, content };
-    } catch (error: any) {
-      logger.error('Error reading file:', error);
-      return { success: false, error: error.message };
+export function setupFileSystemHandlers() {
+  
+  // ============================================
+  // 1. فتح ملف واحد
+  // ============================================
+  ipcMain.handle('fs:openFile', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [
+        { name: 'All Files', extensions: ['*'] },
+        { name: 'Text Files', extensions: ['txt', 'md'] },
+        { name: 'Code Files', extensions: ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'cpp', 'c'] },
+        { name: 'Web Files', extensions: ['html', 'css', 'scss', 'json'] },
+      ]
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
     }
+
+    const filePath = result.filePaths[0];
+    const content = await fs.readFile(filePath, 'utf-8');
+    
+    return {
+      path: filePath,
+      name: path.basename(filePath),
+      content: content,
+      size: (await fs.stat(filePath)).size,
+    };
   });
 
-  ipcMain.handle('fs:write', async (_event: IpcMainInvokeEvent, filePath: string, content: string) => {
+  // ============================================
+  // 2. فتح مجلد
+  // ============================================
+  ipcMain.handle('fs:openFolder', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory']
+    });
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+
+    const folderPath = result.filePaths[0];
+    const files = await readDirectory(folderPath);
+    
+    return {
+      path: folderPath,
+      name: path.basename(folderPath),
+      files: files,
+    };
+  });
+
+  // ============================================
+  // 3. قراءة محتويات مجلد
+  // ============================================
+  ipcMain.handle('fs:readDirectory', async (_, dirPath: string) => {
+    return await readDirectory(dirPath);
+  });
+
+  // ============================================
+  // 4. حفظ ملف
+  // ============================================
+  ipcMain.handle('fs:saveFile', async (_, filePath: string, content: string) => {
     try {
-      logger.debug('Writing file:', filePath);
-      await fs.ensureDir(path.dirname(filePath));
       await fs.writeFile(filePath, content, 'utf-8');
-      return { success: true };
+      return { success: true, path: filePath };
     } catch (error: any) {
-      logger.error('Error writing file:', error);
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('fs:readdir', async (_event: IpcMainInvokeEvent, dirPath: string) => {
+  // ============================================
+  // 5. حفظ باسم
+  // ============================================
+  ipcMain.handle('fs:saveFileAs', async (_, defaultName: string, content: string) => {
+    const result = await dialog.showSaveDialog({
+      defaultPath: defaultName,
+      filters: [
+        { name: 'All Files', extensions: ['*'] },
+        { name: 'Text Files', extensions: ['txt', 'md'] },
+        { name: 'JavaScript', extensions: ['js', 'jsx'] },
+        { name: 'TypeScript', extensions: ['ts', 'tsx'] },
+        { name: 'Python', extensions: ['py'] },
+      ]
+    });
+
+    if (result.canceled || !result.filePath) {
+      return null;
+    }
+
     try {
-      logger.debug('Reading directory:', dirPath);
-      const entries = await fs.readdir(dirPath, { withFileTypes: true });
+      await fs.writeFile(result.filePath, content, 'utf-8');
+      return {
+        success: true,
+        path: result.filePath,
+        name: path.basename(result.filePath),
+      };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ============================================
+  // 6. ملف جديد
+  // ============================================
+  ipcMain.handle('fs:newFile', async () => {
+    return {
+      name: 'untitled.txt',
+      content: '',
+      isNew: true,
+      path: null,
+    };
+  });
+
+  // ============================================
+  // 7. مجلد جديد
+  // ============================================
+  ipcMain.handle('fs:newFolder', async (_, parentPath: string, folderName: string) => {
+    const newFolderPath = path.join(parentPath, folderName);
+    
+    try {
+      await fs.mkdir(newFolderPath, { recursive: true });
+      return { success: true, path: newFolderPath };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // ============================================
+  // 8. حذف ملف
+  // ============================================
+  ipcMain.handle('fs:deleteFile', async (_, filePath: string) => {
+    try {
+      const stats = await fs.stat(filePath);
       
-      const items = await Promise.all(
-        entries.map(async (entry) => {
-          const fullPath = path.join(dirPath, entry.name);
-          const stats = await fs.stat(fullPath);
-          
-          return {
-            name: entry.name,
-            path: fullPath,
-            isDirectory: entry.isDirectory(),
-            isFile: entry.isFile(),
-            size: stats.size,
-            modified: stats.mtime,
-            created: stats.birthtime,
-          };
-        })
-      );
+      if (stats.isDirectory()) {
+        await fs.rm(filePath, { recursive: true, force: true });
+      } else {
+        await fs.unlink(filePath);
+      }
       
-      return { success: true, items };
-    } catch (error: any) {
-      logger.error('Error reading directory:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  ipcMain.handle('fs:mkdir', async (_event: IpcMainInvokeEvent, dirPath: string) => {
-    try {
-      logger.debug('Creating directory:', dirPath);
-      await fs.ensureDir(dirPath);
       return { success: true };
     } catch (error: any) {
-      logger.error('Error creating directory:', error);
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('fs:delete', async (_event: IpcMainInvokeEvent, targetPath: string) => {
+  // ============================================
+  // 9. إعادة تسمية
+  // ============================================
+  ipcMain.handle('fs:renameFile', async (_, oldPath: string, newName: string) => {
     try {
-      logger.debug('Deleting:', targetPath);
-      await fs.remove(targetPath);
-      return { success: true };
-    } catch (error: any) {
-      logger.error('Error deleting:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  ipcMain.handle('fs:rename', async (_event: IpcMainInvokeEvent, oldPath: string, newPath: string) => {
-    try {
-      logger.debug('Renaming:', oldPath, 'to', newPath);
+      const dir = path.dirname(oldPath);
+      const newPath = path.join(dir, newName);
+      
       await fs.rename(oldPath, newPath);
-      return { success: true };
+      return { success: true, newPath: newPath };
     } catch (error: any) {
-      logger.error('Error renaming:', error);
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('fs:exists', async (_event: IpcMainInvokeEvent, targetPath: string) => {
+  // ============================================
+  // 10. نسخ ملف
+  // ============================================
+  ipcMain.handle('fs:copyFile', async (_, sourcePath: string, destPath: string) => {
     try {
-      const exists = await fs.pathExists(targetPath);
-      return { success: true, exists };
+      await fs.copyFile(sourcePath, destPath);
+      return { success: true, path: destPath };
     } catch (error: any) {
-      logger.error('Error checking existence:', error);
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('fs:watch', async (event: IpcMainInvokeEvent, dirPath: string, watchId: string) => {
+  // ============================================
+  // 11. قراءة ملف
+  // ============================================
+  ipcMain.handle('fs:readFile', async (_, filePath: string) => {
     try {
-      logger.debug('Setting up watcher for:', dirPath);
+      const content = await fs.readFile(filePath, 'utf-8');
+      const stats = await fs.stat(filePath);
       
-      if (watchers.has(watchId)) {
-        await watchers.get(watchId)?.close();
-      }
-
-      const watcher = chokidar.watch(dirPath, {
-        ignored: /(^|[\/\\])\../, // ignore dotfiles
-        persistent: true,
-        ignoreInitial: true,
-        depth: 10,
-      });
-
-      watcher
-        .on('add', (filePath) => {
-          event.sender.send('fs:watcher-event', {
-            type: 'add',
-            path: filePath,
-            watchId,
-          });
-        })
-        .on('change', (filePath) => {
-          event.sender.send('fs:watcher-event', {
-            type: 'change',
-            path: filePath,
-            watchId,
-          });
-        })
-        .on('unlink', (filePath) => {
-          event.sender.send('fs:watcher-event', {
-            type: 'unlink',
-            path: filePath,
-            watchId,
-          });
-        })
-        .on('addDir', (dirPath) => {
-          event.sender.send('fs:watcher-event', {
-            type: 'addDir',
-            path: dirPath,
-            watchId,
-          });
-        })
-        .on('unlinkDir', (dirPath) => {
-          event.sender.send('fs:watcher-event', {
-            type: 'unlinkDir',
-            path: dirPath,
-            watchId,
-          });
-        });
-
-      watchers.set(watchId, watcher);
-      return { success: true };
+      return {
+        success: true,
+        content: content,
+        size: stats.size,
+        modified: stats.mtime,
+      };
     } catch (error: any) {
-      logger.error('Error setting up watcher:', error);
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('fs:unwatch', async (_event: IpcMainInvokeEvent, watchId: string) => {
+  // ============================================
+  // 12. التحقق من وجود ملف
+  // ============================================
+  ipcMain.handle('fs:exists', async (_, filePath: string) => {
     try {
-      const watcher = watchers.get(watchId);
-      if (watcher) {
-        await watcher.close();
-        watchers.delete(watchId);
-      }
-      return { success: true };
-    } catch (error: any) {
-      logger.error('Error closing watcher:', error);
-      return { success: false, error: error.message };
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
     }
   });
+}
+
+// ============================================
+// Helper Functions
+// ============================================
+
+async function readDirectory(dirPath: string): Promise<FileInfo[]> {
+  try {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    const files: FileInfo[] = [];
+
+    for (const entry of entries) {
+      // تجاهل الملفات المخفية و node_modules
+      if (entry.name.startsWith('.') || entry.name === 'node_modules') {
+        continue;
+      }
+
+      const fullPath = path.join(dirPath, entry.name);
+      const stats = await fs.stat(fullPath);
+
+      files.push({
+        name: entry.name,
+        path: fullPath,
+        isDirectory: entry.isDirectory(),
+        size: stats.size,
+        modified: stats.mtime,
+      });
+    }
+
+    // ترتيب: المجلدات أولاً ثم الملفات
+    files.sort((a, b) => {
+      if (a.isDirectory && !b.isDirectory) return -1;
+      if (!a.isDirectory && b.isDirectory) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return files;
+  } catch (error) {
+    console.error('Error reading directory:', error);
+    return [];
+  }
 }

@@ -1,16 +1,4 @@
-// Electron API types
-declare global {
-  interface Window {
-    electron: {
-      ipcRenderer: {
-        invoke(channel: string, ...args: any[]): Promise<any>;
-        on(channel: string, func: (...args: any[]) => void): void;
-        removeListener(channel: string, func: (...args: any[]) => void): void;
-        removeAllListeners(channel: string): void;
-      };
-    };
-  }
-}
+// Electron API types - defined in src/types/electron.d.ts
 
 export interface GodModeTask {
   id: string;

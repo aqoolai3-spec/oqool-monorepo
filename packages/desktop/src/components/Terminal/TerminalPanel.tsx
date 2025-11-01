@@ -63,7 +63,7 @@ export const TerminalPanel: React.FC = () => {
             className="terminal-wrapper"
             style={{ display: activeTerminal === term.id ? 'block' : 'none' }}
           >
-            <Terminal terminalId={term.id} name={term.name} cwd={term.cwd} />
+            <Terminal />
           </div>
         ))}
       </div>

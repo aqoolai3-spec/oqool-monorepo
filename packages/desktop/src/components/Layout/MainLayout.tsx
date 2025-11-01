@@ -3,6 +3,7 @@ import { FileExplorer } from '../Sidebar/FileExplorer';
 import { Editor, EditorTabs } from '../Editor';
 import { TerminalPanel } from '../Terminal';
 import { AIPanel } from '../AI';
+import TopBar from './TopBar';
 import './MainLayout.css';
 
 export const MainLayout: React.FC = () => {
@@ -13,6 +14,9 @@ export const MainLayout: React.FC = () => {
 
   return (
     <div className="main-layout">
+      {/* TopBar - Menu Bar with Search */}
+      <TopBar />
+
       {/* Titlebar */}
       <div className="titlebar">
         <div className="titlebar-left">

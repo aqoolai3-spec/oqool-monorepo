@@ -1,27 +1,140 @@
-import { ipcMain, IpcMainInvokeEvent } from 'electron';
+// electron/ipc/ai.ts
+import { ipcMain } from 'electron';
 import Anthropic from '@anthropic-ai/sdk';
-import { logger } from '../services/logger';
 
+// تهيئة Anthropic client
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || '',
 });
 
-export function aiHandlers() {
-  ipcMain.handle('ai:call', async (_event: IpcMainInvokeEvent, prompt: string, personality?: string, model?: string) => {
+// ============================================
+// تعريف الشخصيات الـ8
+// ============================================
+
+const PERSONALITIES = {
+  architect: {
+    name: 'Architect - System Designer',
+    emoji: '🏗️',
+    systemPrompt: `أنت مهندس نظام خبير. تخصصك:
+- تصميم البنية المعمارية للأنظمة
+- اقتراح أنماط التصميم (Design Patterns)
+- تحليل البنية الحالية واقتراح تحسينات
+- التفكير على مستوى عالي (High-level architecture)
+
+أسلوبك: محترف، استراتيجي، يفكر بالصورة الكبيرة.`,
+  },
+  
+  coder: {
+    name: 'Coder - Code Writer',
+    emoji: '💻',
+    systemPrompt: `أنت مبرمج محترف. تخصصك:
+- كتابة كود نظيف وفعال
+- توليد الكود من الوصف
+- شرح الكود بطريقة واضحة
+- تحسين الكود الموجود
+
+أسلوبك: عملي، مباشر، يركز على التنفيذ.`,
+  },
+  
+  reviewer: {
+    name: 'Reviewer - Code Analyst',
+    emoji: '👁️',
+    systemPrompt: `أنت محلل كود خبير. تخصصك:
+- مراجعة الكود بدقة
+- اكتشاف المشاكل والـ Code Smells
+- اقتراح تحسينات على الكود
+- فحص Best Practices
+
+أسلوبك: ناقد بناء، دقيق، يهتم بالجودة.`,
+  },
+  
+  tester: {
+    name: 'Tester - QA Expert',
+    emoji: '🧪',
+    systemPrompt: `أنت خبير اختبارات. تخصصك:
+- توليد حالات الاختبار (Test Cases)
+- كتابة Unit Tests و Integration Tests
+- اكتشاف الـ Edge Cases
+- تحليل تغطية الاختبارات
+
+أسلوبك: شامل، يفكر في كل الاحتمالات، وقائي.`,
+  },
+  
+  debugger: {
+    name: 'Debugger - Problem Solver',
+    emoji: '🐛',
+    systemPrompt: `أنت محلل مشاكل خبير. تخصصك:
+- تتبع الأخطاء وحلها
+- تحليل Stack Traces
+- اقتراح حلول للمشاكل
+- Debug خطوة بخطوة
+
+أسلوبك: تحليلي، منهجي، صبور.`,
+  },
+  
+  optimizer: {
+    name: 'Optimizer - Performance Guru',
+    emoji: '⚡',
+    systemPrompt: `أنت خبير تحسين الأداء. تخصصك:
+- تحليل الأداء (Performance Analysis)
+- تحسين السرعة والذاكرة
+- اكتشاف Bottlenecks
+- اقتراح تحسينات الأداء
+
+أسلوبك: دقيق، يقيس بالأرقام، يركز على النتائج.`,
+  },
+  
+  security: {
+    name: 'Security - Security Expert',
+    emoji: '🔐',
+    systemPrompt: `أنت خبير أمن سيبراني. تخصصك:
+- مراجعة أمنية للكود
+- اكتشاف الثغرات (Vulnerabilities)
+- اقتراح حلول أمنية
+- Best Practices للأمان
+
+أسلوبك: حذر، شامل، يفكر مثل المهاجم.`,
+  },
+  
+  devops: {
+    name: 'DevOps - Infrastructure Pro',
+    emoji: '🔧',
+    systemPrompt: `أنت خبير DevOps. تخصصك:
+- إعداد CI/CD
+- Docker و Kubernetes
+- Cloud Infrastructure
+- Deployment Strategies
+
+أسلوبك: عملي، يهتم بالأتمتة، يفكر بالبنية التحتية.`,
+  },
+};
+
+// ============================================
+// Setup Handlers
+// ============================================
+
+export function setupAIHandlers() {
+  
+  // ============================================
+  // 1. إرسال رسالة للـ AI
+  // ============================================
+  ipcMain.handle('ai:sendMessage', async (_, message: string, personality: string, model: string) => {
     try {
-      logger.debug('AI call with personality:', personality);
+      const personalityConfig = PERSONALITIES[personality as keyof typeof PERSONALITIES];
+      
+      if (!personalityConfig) {
+        throw new Error('Personality not found');
+      }
 
-      const systemPrompt = getPersonalityPrompt(personality);
-      const selectedModel = model || 'claude-sonnet-4-20250514';
-
+      // استدعاء Claude API
       const response = await anthropic.messages.create({
-        model: selectedModel,
-        max_tokens: 8192,
-        system: systemPrompt,
+        model: model || 'claude-3-5-sonnet-20241022',
+        max_tokens: 4096,
+        system: personalityConfig.systemPrompt,
         messages: [
           {
             role: 'user',
-            content: prompt,
+            content: message,
           },
         ],
       });
@@ -29,89 +142,101 @@ export function aiHandlers() {
       const content = response.content[0];
       const text = content.type === 'text' ? content.text : '';
 
-      return { success: true, response: text, usage: response.usage };
+      return {
+        success: true,
+        message: text,
+        personality: personalityConfig.name,
+        emoji: personalityConfig.emoji,
+        model: model,
+      };
     } catch (error: any) {
-      logger.error('Error calling AI:', error);
-      return { success: false, error: error.message };
+      console.error('AI Error:', error);
+      return {
+        success: false,
+        error: error.message,
+      };
     }
   });
 
-  ipcMain.handle('ai:stream', async (event: IpcMainInvokeEvent, requestId: string, prompt: string, personality?: string) => {
-    try {
-      logger.debug('AI streaming with personality:', personality);
-
-      const systemPrompt = getPersonalityPrompt(personality);
-
-      const stream = await anthropic.messages.stream({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 8192,
-        system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      });
-
-      stream.on('text', (text) => {
-        event.sender.send('ai:stream-data', { requestId, type: 'text', data: text });
-      });
-
-      stream.on('end', () => {
-        event.sender.send('ai:stream-data', { requestId, type: 'end' });
-      });
-
-      stream.on('error', (error) => {
-        event.sender.send('ai:stream-data', { requestId, type: 'error', error: error.message });
-      });
-
-      return { success: true, requestId };
-    } catch (error: any) {
-      logger.error('Error streaming AI:', error);
-      return { success: false, error: error.message };
-    }
+  // ============================================
+  // 2. الحصول على قائمة الشخصيات
+  // ============================================
+  ipcMain.handle('ai:getPersonalities', async () => {
+    return Object.entries(PERSONALITIES).map(([key, value]) => ({
+      id: key,
+      name: value.name,
+      emoji: value.emoji,
+    }));
   });
 
-  ipcMain.handle('ai:inline-suggest', async (_event: IpcMainInvokeEvent, code: string, language: string, position: { line: number; column: number }) => {
-    try {
-      const prompt = `Continue this ${language} code from line ${position.line}, column ${position.column}. Provide ONLY the completion code, no explanations, no markdown:
-
-${code}`;
-
-      const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      });
-
-      const content = response.content[0];
-      const suggestion = content.type === 'text' ? content.text.trim() : '';
-
-      return { success: true, suggestion };
-    } catch (error: any) {
-      logger.error('Error getting inline suggestion:', error);
-      return { success: false, error: error.message };
-    }
+  // ============================================
+  // 3. الحصول على النماذج المتاحة
+  // ============================================
+  ipcMain.handle('ai:getModels', async () => {
+    return [
+      {
+        id: 'claude-3-5-sonnet-20241022',
+        name: 'Claude 3.5 Sonnet',
+        description: 'الأذكى والأسرع',
+      },
+      {
+        id: 'claude-3-opus-20240229',
+        name: 'Claude 3 Opus',
+        description: 'الأقوى للمهام المعقدة',
+      },
+      {
+        id: 'claude-3-sonnet-20240229',
+        name: 'Claude 3 Sonnet',
+        description: 'متوازن وسريع',
+      },
+    ];
   });
-}
 
-function getPersonalityPrompt(personality?: string): string {
-  const prompts: Record<string, string> = {
-    alex: 'أنت Alex، معماري أنظمة خبير. تركز على التصميم المعماري، الأنماط، والحلول القابلة للتوسع.',
-    sarah: 'أنت Sarah، مطورة Full-stack محترفة. تكتب كود نظيف، قابل للصيانة، وتتبع أفضل الممارسات.',
-    mike: 'أنت Mike، خبير في مراجعة الكود. تركز على جودة الكود، الأمان، والأداء.',
-    guardian: 'أنت Guardian، خبير أمن سيبراني. تركز على الثغرات الأمنية وأفضل ممارسات الأمان.',
-    olivia: 'أنت Olivia، خبيرة في الاختبارات. تكتب اختبارات شاملة وتغطي جميع الحالات.',
-    tom: 'أنت Tom، خبير في تحسين الأداء. تركز على الكفاءة، السرعة، واستهلاك الموارد.',
-    emma: 'أنت Emma، خبيرة في التوثيق. تكتب توثيق واضح، شامل، وسهل الفهم.',
-    max: 'أنت Max، معلم برمجة صبور. تشرح المفاهيم بوضوح وتساعد في التعلم.',
-  };
+  // ============================================
+  // 4. God Mode - استشارة جميع الشخصيات
+  // ============================================
+  ipcMain.handle('ai:godMode', async (_, message: string, model: string) => {
+    const results: any[] = [];
 
-  return prompts[personality || ''] || 'أنت مساعد برمجة ذكي ومفيد.';
+    // استشارة كل شخصية
+    for (const [key, personality] of Object.entries(PERSONALITIES)) {
+      try {
+        const response = await anthropic.messages.create({
+          model: model || 'claude-3-5-sonnet-20241022',
+          max_tokens: 2048,
+          system: personality.systemPrompt,
+          messages: [
+            {
+              role: 'user',
+              content: message,
+            },
+          ],
+        });
+
+        const content = response.content[0];
+        const text = content.type === 'text' ? content.text : '';
+
+        results.push({
+          personality: personality.name,
+          emoji: personality.emoji,
+          response: text,
+          id: key,
+        });
+      } catch (error: any) {
+        console.error(`Error with ${key}:`, error);
+        results.push({
+          personality: personality.name,
+          emoji: personality.emoji,
+          response: `خطأ: ${error.message}`,
+          id: key,
+          error: true,
+        });
+      }
+    }
+
+    return {
+      success: true,
+      results: results,
+    };
+  });
 }

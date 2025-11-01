@@ -1,0 +1,155 @@
+.command-palette-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  padding-top: 100px;
+  z-index: 10000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.command-palette {
+  width: 600px;
+  max-height: 500px;
+  background: #252526;
+  border: 1px solid #454545;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.command-palette-search {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #2d2d30;
+  gap: 12px;
+}
+
+.search-icon {
+  color: #858585;
+  flex-shrink: 0;
+}
+
+.command-palette-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e0e0e0;
+  font-size: 15px;
+  font-family: inherit;
+}
+
+.command-palette-input::placeholder {
+  color: #858585;
+}
+
+.command-palette-results {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.command-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.command-item:hover,
+.command-item.selected {
+  background: #2d2d30;
+  border-left-color: #007acc;
+}
+
+.command-icon {
+  color: #007acc;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.command-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.command-label {
+  color: #e0e0e0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.command-description {
+  color: #858585;
+  font-size: 12px;
+}
+
+.command-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.command-category {
+  color: #858585;
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.command-shortcut {
+  color: #858585;
+  font-size: 11px;
+  font-family: 'Consolas', 'Monaco', monospace;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.no-results {
+  padding: 40px 20px;
+  text-align: center;
+  color: #858585;
+}
+
+.no-results p {
+  font-size: 14px;
+}

@@ -133,8 +133,9 @@ body {
 /* Main Container */
 .main-container {
   display: flex;
-  height: calc(100vh - 57px); /* Top bar + Status bar */
+  flex: 1;
   overflow: hidden;
+  min-height: 0;
 }
 
 /* Sidebar */
@@ -457,21 +458,71 @@ body {
 }
 
 /* Status Bar */
-.status-bar {
+.status-bar.app-status-bar {
   height: 22px;
-  background: #007acc;
-  color: #ffffff;
+  background: linear-gradient(135deg, #2d2d30 0%, #252526 100%);
+  color: #cccccc;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px;
-  font-size: 12px;
+  padding: 0 0.75rem;
+  font-size: 0.75rem;
+  user-select: none;
+  border-top: 1px solid #3e3e42;
+  font-family: 'Segoe UI', system-ui;
+  box-shadow: 0 -1px 5px rgba(0, 0, 0, 0.3);
 }
 
-.status-left, .status-right {
+.app-status-bar .status-left,
+.app-status-bar .status-right {
   display: flex;
-  gap: 15px;
   align-items: center;
+  gap: 0.75rem;
+}
+
+.app-status-bar .status-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 3px;
+  font-weight: 400;
+  padding: 0 0.35rem;
+  color: inherit;
+}
+
+.app-status-bar .status-item.git-branch {
+  background: rgba(30, 144, 255, 0.15);
+  color: #1e90ff;
+  padding: 0 0.45rem;
+}
+
+.app-status-bar .status-item .icon {
+  font-size: 0.85rem;
+}
+
+.app-status-bar .status-item .icon.error {
+  color: #f14c4c;
+}
+
+.app-status-bar .status-item .icon.warning {
+  color: #ffb454;
+}
+
+.app-status-bar .status-item.language {
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+.app-status-bar .status-item.encoding {
+  text-transform: uppercase;
+}
+
+.terminal-panel {
+  height: 200px;
+  background: #1e1e1e;
+  border-top: 1px solid #2d2d30;
+  border-bottom: 1px solid #1f1f23;
+  overflow: hidden;
 }
 
 /* Notifications */

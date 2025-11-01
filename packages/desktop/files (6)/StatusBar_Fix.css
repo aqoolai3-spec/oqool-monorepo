@@ -1,0 +1,64 @@
+/* إصلاح Status Bar - أزل الشريط الأزرق */
+
+/* في App.css أو ملف CSS الرئيسي */
+
+.status-bar {
+  background: #007acc;  /* ← هذا هو الشريط الأزرق! */
+  color: #ffffff;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 12px;
+  border-top: none;  /* ← أزل أي border */
+}
+
+/* إذا تريد تغيير اللون من أزرق إلى رمادي غامق: */
+.status-bar {
+  background: #2d2d30;  /* ← رمادي غامق بدل أزرق */
+  color: #cccccc;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 12px;
+  border-top: 1px solid #3c3c3c;  /* border خفيف */
+}
+
+/* أو إذا تريده مثل VS Code تماماً: */
+.status-bar {
+  background: #007acc;  /* أزرق VS Code */
+  color: #ffffff;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  font-size: 12px;
+  border-top: none;
+  font-weight: 500;
+}
+
+.status-bar span {
+  font-weight: 500;
+}
+
+/* إزالة أي خطوط زرقاء إضافية */
+* {
+  box-sizing: border-box;
+}
+
+*:focus {
+  outline: none;
+}
+
+/* إزالة outline من المدخلات */
+input:focus,
+textarea:focus,
+select:focus,
+button:focus {
+  outline: none;
+  box-shadow: none;
+}

@@ -7,6 +7,7 @@ interface EditorProps {
   fileName: string;
   onSave: (fileName: string, content: string) => void;
   onRun: () => void;
+  onMount?: (editor: any) => void;
 }
 
 const Editor: React.FC<EditorProps> = ({ 
@@ -14,7 +15,8 @@ const Editor: React.FC<EditorProps> = ({
   onCodeChange, 
   fileName, 
   onSave,
-  onRun
+  onRun,
+  onMount
 }) => {
   const [language, setLanguage] = useState<string>('typescript');
   const [showMinimap, setShowMinimap] = useState<boolean>(true);
@@ -158,7 +160,10 @@ const Editor: React.FC<EditorProps> = ({
           theme="vs-dark"
           value={code}
           onChange={handleCodeChange}
-          onMount={(editor) => { editorRef.current = editor; }}
+          onMount={(editor) => {
+            editorRef.current = editor;
+            onMount?.(editor);
+          }}
           options={{
             fontSize: fontSize,
             minimap: { enabled: showMinimap },

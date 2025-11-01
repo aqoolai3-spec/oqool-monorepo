@@ -1,0 +1,104 @@
+.terminal {
+  height: 200px;
+  background: #1e1e1e;
+  border-top: 1px solid #2d2d30;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-header {
+  height: 35px;
+  background: #252526;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid #2d2d30;
+}
+
+.terminal-title {
+  color: #cccccc;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.terminal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.terminal-btn {
+  background: transparent;
+  border: none;
+  color: #858585;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.terminal-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #cccccc;
+}
+
+.terminal-content {
+  flex: 1;
+  padding: 8px;
+  overflow-y: auto;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.terminal-line {
+  margin-bottom: 4px;
+}
+
+.terminal-mt {
+  margin-top: 8px;
+}
+
+.prompt-user {
+  color: #6a9955;
+}
+
+.prompt-separator {
+  color: #cccccc;
+}
+
+.prompt-path {
+  color: #569cd6;
+}
+
+.prompt-dollar {
+  color: #cccccc;
+}
+
+.command-text {
+  color: #ce9178;
+}
+
+.success-icon {
+  color: #6a9955;
+}
+
+.success-text {
+  color: #6a9955;
+}
+
+.info-text {
+  color: #4fc3f7;
+}
+
+.cursor-blink {
+  color: #cccccc;
+  animation: blink 1s infinite;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import FileTree from './FileTree';
 import Editor from './Editor';
 import Notification from './Notification';
 import { useNotifications } from '../hooks/useNotifications';
+import Terminal from './Terminal';
+import StatusBar from './StatusBar';
 import './SplitLayout.css';
 
 interface FileItem {
@@ -10,17 +12,26 @@ interface FileItem {
   type: 'file' | 'folder';
   children?: FileItem[];
   content?: string;
+  path?: string;
 }
 
 const SplitLayout: React.FC = () => {
   const [code, setCode] = useState<string>('console.log("Hello VS Code!");');
   const [currentFile, setCurrentFile] = useState<FileItem | null>(null);
+  const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const { notifications, removeNotification, showSuccess, showInfo } = useNotifications();
+  const cursorListenerRef = useRef<any>(null);
+
+  useEffect(() => () => {
+    cursorListenerRef.current?.dispose?.();
+    cursorListenerRef.current = null;
+  }, []);
 
   const handleFileSelect = (file: FileItem) => {
     setCurrentFile(file);
     setCode(file.content || '// Empty file');
+    setCursorPosition({ line: 1, column: 1 });
     showInfo(`File opened: ${file.name}`);
   };
 
@@ -41,6 +52,35 @@ const SplitLayout: React.FC = () => {
   const closeMenus = () => {
     setOpenMenuId(null);
   };
+
+  const handleEditorMount = (editor: any) => {
+    if (!editor) return;
+
+    if (cursorListenerRef.current) {
+      cursorListenerRef.current.dispose?.();
+    }
+
+    const position = editor.getPosition?.();
+    if (position) {
+      setCursorPosition({ line: position.lineNumber, column: position.column });
+    }
+
+    cursorListenerRef.current = editor.onDidChangeCursorPosition?.((event: any) => {
+      setCursorPosition({
+        line: event.position.lineNumber,
+        column: event.position.column
+      });
+    });
+
+    editor.onDidDispose?.(() => {
+      cursorListenerRef.current?.dispose?.();
+      cursorListenerRef.current = null;
+    });
+  };
+
+  const currentLanguage = getLanguageFromFile(currentFile?.name);
+  const lineCount = currentFile ? code.split('\n').length : 0;
+  const currentFilePath = currentFile?.path || currentFile?.name;
 
   return (
     <div className="vscode-layout" onClick={closeMenus}>
@@ -226,6 +266,7 @@ const SplitLayout: React.FC = () => {
                 fileName={currentFile.name}
                 onSave={handleSave}
                 onRun={handleRun}
+                onMount={handleEditorMount}
               />
             ) : (
               <div className="empty-editor">
@@ -268,19 +309,40 @@ const SplitLayout: React.FC = () => {
         </div>
       </div>
 
-      <div className="status-bar">
-        <div className="status-left">
-          <span>⚡ main</span>
-          <span>✓ 0 ⚠ 0</span>
-        </div>
-        <div className="status-right">
-          <span>UTF-8</span>
-          <span>LF</span>
-          <span>TypeScript</span>
-        </div>
+      <div className="terminal-panel">
+        <Terminal />
       </div>
+
+      <StatusBar
+        currentFile={currentFilePath}
+        language={currentLanguage}
+        lineCount={lineCount}
+        cursorPosition={cursorPosition}
+        gitBranch="main"
+        errors={0}
+        warnings={0}
+      />
     </div>
   );
 };
 
 export default SplitLayout;
+
+const getLanguageFromFile = (fileName?: string): string => {
+  if (!fileName) return 'Plain Text';
+
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  const languageMap: { [key: string]: string } = {
+    ts: 'TypeScript',
+    tsx: 'TypeScript React',
+    js: 'JavaScript',
+    jsx: 'JavaScript React',
+    py: 'Python',
+    html: 'HTML',
+    css: 'CSS',
+    json: 'JSON',
+    md: 'Markdown'
+  };
+
+  return languageMap[extension || ''] || 'Plain Text';
+};

@@ -1,0 +1,267 @@
+/* TopBar.css - نسخة نهائية */
+
+.top-bar {
+  background: #323233;
+  height: 35px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  
+  /* ← إزالة كل الـ borders */
+  border: none;
+  border-bottom: none;
+  outline: none;
+  
+  user-select: none;
+  -webkit-app-region: drag;
+  position: relative;
+  z-index: 1000;
+}
+
+/* Menu Items */
+.menu-items {
+  display: flex;
+  gap: 5px;
+  font-size: 13px;
+  -webkit-app-region: no-drag;
+}
+
+.menu-item-container {
+  position: relative;
+}
+
+.menu-item {
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 3px;
+  color: #cccccc;
+  transition: all 0.15s ease;
+  font-weight: 400;
+  -webkit-app-region: no-drag;
+}
+
+.menu-item:hover,
+.menu-item.active {
+  background: #3e3e42;
+  color: #ffffff;
+}
+
+/* Dropdown Menu */
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: #3c3c3c;
+  border: 1px solid #555;
+  border-radius: 4px;
+  min-width: 280px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+  padding: 4px 0;
+  margin-top: 2px;
+  max-height: 600px;
+  overflow-y: auto;
+  -webkit-app-region: no-drag;
+}
+
+.dropdown-menu.show {
+  display: block;
+  animation: dropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-item {
+  padding: 7px 16px;
+  font-size: 13px;
+  color: #cccccc;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.1s ease;
+  -webkit-app-region: no-drag;
+}
+
+.dropdown-item:hover {
+  background: #3e3e42;
+  color: #ffffff;
+}
+
+.dropdown-separator {
+  height: 1px;
+  background: #555;
+  margin: 4px 0;
+}
+
+.shortcut-hint {
+  font-size: 11px;
+  color: #858585;
+  margin-left: 30px;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* Search Bar - منطقة السحب */
+.search-bar {
+  flex: 1;
+  max-width: 500px;
+  margin: 0 20px;
+  display: flex;
+  align-items: center;
+  position: relative;
+  -webkit-app-region: drag;
+  /* هنا drag - مافيه no-drag */
+}
+
+.search-bar__drag-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  z-index: 0;
+  -webkit-app-region: drag;
+  pointer-events: none;
+}
+
+.search-input {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: #3c3c3c;
+  border: 1px solid #555;
+  padding: 5px 12px;
+  border-radius: 4px;
+  color: #cccccc;
+  font-size: 13px;
+  transition: all 0.2s ease;
+  -webkit-app-region: no-drag;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #007acc;
+  background: #2d2d30;
+  box-shadow: 0 0 0 1px #007acc;
+}
+
+.search-input::placeholder {
+  color: #858585;
+}
+
+/* API Button */
+.api-button {
+  background: #3c3c3c;
+  border: 1px solid #555;
+  padding: 5px 12px;
+  border-radius: 4px;
+  color: #cccccc;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  -webkit-app-region: no-drag;
+  white-space: nowrap;
+}
+
+.api-button:hover {
+  background: #454545;
+  border-color: #666;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.api-button:active {
+  transform: translateY(0);
+}
+
+/* Language Selector */
+.language-selector {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  -webkit-app-region: no-drag;
+}
+
+.language-select {
+  background: #3c3c3c;
+  border: 1px solid #555;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #cccccc;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+  -webkit-app-region: no-drag;
+}
+
+.language-select:hover {
+  background: #454545;
+  border-color: #666;
+}
+
+.language-select:focus {
+  border-color: #007acc;
+  box-shadow: 0 0 0 1px #007acc;
+}
+
+/* RTL Support */
+[dir="rtl"] .menu-items {
+  flex-direction: row-reverse;
+}
+
+[dir="rtl"] .dropdown-menu {
+  left: auto;
+  right: 0;
+}
+
+[dir="rtl"] .shortcut-hint {
+  margin-left: 0;
+  margin-right: 30px;
+}
+
+[dir="rtl"] .language-selector {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+/* Scrollbar */
+.dropdown-menu::-webkit-scrollbar {
+  width: 10px;
+}
+
+.dropdown-menu::-webkit-scrollbar-track {
+  background: #3c3c3c;
+}
+
+.dropdown-menu::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 5px;
+}
+
+.dropdown-menu::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+/* إزالة أي focus outline أزرق */
+*:focus {
+  outline: none;
+}
+
+button:focus,
+input:focus,
+select:focus {
+  outline: none;
+}

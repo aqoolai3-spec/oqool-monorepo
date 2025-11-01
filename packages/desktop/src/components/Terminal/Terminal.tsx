@@ -1,97 +1,133 @@
-import React, { useEffect, useRef } from 'react';
-import { Terminal as XTerm } from 'xterm';
-import { FitAddon } from 'xterm-addon-fit';
-import { ptyManager } from '../../features/terminal/pty-manager';
-import 'xterm/css/xterm.css';
+import { useState } from 'react';
+import { 
+  VscAdd, 
+  VscSplitHorizontal, 
+  VscTrash, 
+  VscClose,
+  VscTerminal
+} from 'react-icons/vsc';
 import './Terminal.css';
 
-interface TerminalProps {
-  terminalId: string;
+interface TerminalTab {
+  id: number;
   name: string;
-  cwd?: string;
+  type: string;
 }
 
-export const Terminal: React.FC<TerminalProps> = ({ terminalId, name, cwd }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const xtermRef = useRef<XTerm | null>(null);
-  const fitAddonRef = useRef<FitAddon | null>(null);
+export function Terminal() {
+  const [tabs, setTabs] = useState<TerminalTab[]>([
+    { id: 1, name: 'bash', type: 'bash' },
+  ]);
+  const [activeTabId, setActiveTabId] = useState(1);
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-
-    // Create xterm instance
-    const xterm = new XTerm({
-      theme: {
-        background: '#1e1e1e',
-        foreground: '#cccccc',
-        cursor: '#aeafad',
-        black: '#000000',
-        red: '#cd3131',
-        green: '#0dbc79',
-        yellow: '#e5e510',
-        blue: '#2472c8',
-        magenta: '#bc3fbc',
-        cyan: '#11a8cd',
-        white: '#e5e5e5',
-        brightBlack: '#666666',
-        brightRed: '#f14c4c',
-        brightGreen: '#23d18b',
-        brightYellow: '#f5f543',
-        brightBlue: '#3b8eea',
-        brightMagenta: '#d670d6',
-        brightCyan: '#29b8db',
-        brightWhite: '#e5e5e5',
-      },
-      fontFamily: "'Fira Code', 'Cascadia Code', monospace",
-      fontSize: 14,
-      cursorBlink: true,
-      cursorStyle: 'block',
-    });
-
-    const fitAddon = new FitAddon();
-    xterm.loadAddon(fitAddon);
-
-    xterm.open(containerRef.current);
-    fitAddon.fit();
-
-    xtermRef.current = xterm;
-    fitAddonRef.current = fitAddon;
-
-    // Create PTY terminal
-    let ptyTerminal: any = null;
-
-    ptyManager.createTerminal(name, cwd).then((terminal) => {
-      ptyTerminal = terminal;
-
-      // Handle data from PTY
-      terminal.onData((data: string) => {
-        xterm.write(data);
-      });
-
-      // Handle data from xterm
-      xterm.onData((data: string) => {
-        terminal.write(data);
-      });
-    });
-
-    // Handle resize
-    const resizeObserver = new ResizeObserver(() => {
-      fitAddon.fit();
-      if (ptyTerminal) {
-        ptyTerminal.resize(xterm.cols, xterm.rows);
-      }
-    });
-
-    resizeObserver.observe(containerRef.current);
-
-    return () => {
-      resizeObserver.disconnect();
-      xterm.dispose();
-      if (ptyTerminal) {
-        ptyTerminal.dispose();
-      }
+  const addNewTerminal = () => {
+    const newTab = {
+      id: tabs.length + 1,
+      name: `bash ${tabs.length + 1}`,
+      type: 'bash',
     };
-  }, [terminalId, name, cwd]);
+    setTabs([...tabs, newTab]);
+    setActiveTabId(newTab.id);
+  };
 
-  return <div ref={containerRef} className="terminal-container" />;
-};
+  const closeTab = (id: number) => {
+    if (tabs.length === 1) return; // Keep at least one tab
+    const newTabs = tabs.filter((tab) => tab.id !== id);
+    setTabs(newTabs);
+    if (activeTabId === id) {
+      setActiveTabId(newTabs[0].id);
+    }
+  };
+
+  const splitTerminal = () => {
+    alert('Split terminal feature - Coming soon!');
+  };
+
+  const clearTerminal = () => {
+    alert('Clear terminal feature - Coming soon!');
+  };
+
+  return (
+    <div className="terminal">
+      <div className="terminal-header">
+        <div className="terminal-tabs">
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              className={`terminal-tab ${activeTabId === tab.id ? 'active' : ''}`}
+              onClick={() => setActiveTabId(tab.id)}
+            >
+              <span className="terminal-tab-icon">
+                <VscTerminal size={14} />
+              </span>
+              <span className="terminal-tab-name">{tab.name}</span>
+              {tabs.length > 1 && (
+                <button
+                  className="terminal-tab-close"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    closeTab(tab.id);
+                  }}
+                >
+                  <VscClose size={14} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="terminal-actions">
+          <button className="terminal-btn" onClick={addNewTerminal} title="New Terminal">
+            <VscAdd size={16} />
+          </button>
+          <button className="terminal-btn" onClick={splitTerminal} title="Split Terminal">
+            <VscSplitHorizontal size={16} />
+          </button>
+          <button className="terminal-btn" onClick={clearTerminal} title="Clear">
+            <VscTrash size={16} />
+          </button>
+          <button className="terminal-btn" onClick={() => closeTab(activeTabId)} title="Kill Terminal">
+            <VscClose size={16} />
+          </button>
+        </div>
+      </div>
+      <div className="terminal-content">
+        <div className="terminal-line">
+          <span className="prompt-user">amir@oqool</span>
+          <span className="prompt-separator">:</span>
+          <span className="prompt-path">~/oqool-ide-final</span>
+          <span className="prompt-dollar">$ </span>
+          <span className="command-text">npm run dev</span>
+        </div>
+        <div className="terminal-line">
+          <span className="success-icon">✓</span>
+          <span className="command-text"> Vite dev server running at http://localhost:5174</span>
+        </div>
+        <div className="terminal-line">
+          <span className="info-text">🚀 Oqool IDE v1.0.0</span>
+        </div>
+        <div className="terminal-line terminal-mt">
+          <span className="command-text">Features loaded:</span>
+        </div>
+        <div className="terminal-line">
+          <span className="success-text">  ✓ Monaco Editor</span>
+        </div>
+        <div className="terminal-line">
+          <span className="success-text">  ✓ IntelliSense</span>
+        </div>
+        <div className="terminal-line">
+          <span className="success-text">  ✓ Syntax Highlighting</span>
+        </div>
+        <div className="terminal-line">
+          <span className="success-text">  ✓ AI Assistant</span>
+        </div>
+        <div className="terminal-line terminal-mt">
+          <span className="prompt-user">amir@oqool</span>
+          <span className="prompt-separator">:</span>
+          <span className="prompt-path">~/oqool-ide-final</span>
+          <span className="prompt-dollar">$ </span>
+          <span className="cursor-blink">█</span>
+        </div>
+      </div>
+    </div>
+  );
+}

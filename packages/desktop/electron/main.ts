@@ -1,16 +1,19 @@
 import { app, BrowserWindow, ipcMain, Menu } from 'electron';
 import path from 'path';
-import { fileSystemHandlers } from './ipc/file-system';
+import { setupFileSystemHandlers } from './ipc/file-system';
 import { terminalHandlers } from './ipc/terminal';
-import { aiHandlers } from './ipc/ai';
+import { setupAIHandlers } from './ipc/ai';
 import { settingsHandlers } from './ipc/settings';
 import { gitHandlers } from './ipc/git';
 import { extensionHandlers } from './ipc/extensions';
 import { logger } from './services/logger';
 import { setupAutoUpdater } from './services/updater';
-import { createApplicationMenu } from './menu';
+// import { createApplicationMenu } from './menu'; // ← معطل لإخفاء القائمة
 
 let mainWindow: BrowserWindow | null = null;
+
+// إخفاء القائمة تماماً
+Menu.setApplicationMenu(null);
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -19,13 +22,14 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     backgroundColor: '#1e1e1e',
-    frame: false,
-    titleBarStyle: 'hidden',
+    frame: false,                      // ← بدون إطار للسحب
+    titleBarStyle: 'hidden',           // ← إخفاء شريط العنوان
+    autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
+      sandbox: false,
       webSecurity: true,
     },
     show: false,
@@ -47,16 +51,17 @@ function createWindow() {
     mainWindow = null;
   });
 
-  const menu = createApplicationMenu();
-  Menu.setApplicationMenu(menu);
+  // القائمة معطلة - نستخدم القائمة الداخلية في التطبيق
+  // const menu = createApplicationMenu();
+  // Menu.setApplicationMenu(menu);
 }
 
 app.whenReady().then(() => {
   logger.info('App ready, creating window');
   
-  fileSystemHandlers();
+  setupFileSystemHandlers();
   terminalHandlers();
-  aiHandlers();
+  setupAIHandlers();
   settingsHandlers();
   gitHandlers();
   extensionHandlers();

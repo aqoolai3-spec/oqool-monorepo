@@ -1,0 +1,248 @@
+.api-providers-manager {
+  padding: 20px;
+  background: #1e1e1e;
+  min-height: 100%;
+}
+
+.api-providers-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.api-providers-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.api-add-btn {
+  padding: 10px 20px;
+  background: #3e3e42;
+  color: #ffffff;
+  border: none;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.api-add-btn:hover {
+  background: #4a4a4e;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Empty State */
+.api-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #858585;
+}
+
+.api-empty-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  opacity: 0.5;
+}
+
+.api-empty-state p {
+  font-size: 16px;
+  margin-bottom: 24px;
+}
+
+.api-empty-btn {
+  padding: 12px 24px;
+  background: #3e3e42;
+  color: #ffffff;
+  border: none;
+  border-radius: 5px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.api-empty-btn:hover {
+  background: #4a4a4e;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Providers List */
+.api-providers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.api-provider-card {
+  background: #2d2d30;
+  border: 2px solid #454545;
+  border-radius: 8px;
+  padding: 20px;
+  transition: all 0.2s;
+}
+
+.api-provider-card.inactive {
+  opacity: 0.6;
+}
+
+.api-provider-card.selected {
+  border-color: #3e3e42;
+  box-shadow: 0 0 0 2px rgba(62, 62, 66, 0.3);
+}
+
+.api-provider-card:hover {
+  border-color: #555;
+}
+
+.api-provider-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.api-provider-info {
+  flex: 1;
+}
+
+.api-provider-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 8px;
+}
+
+.api-provider-key {
+  font-size: 13px;
+  color: #858585;
+  font-family: 'Consolas', 'Monaco', monospace;
+  margin-bottom: 4px;
+}
+
+.api-provider-models {
+  font-size: 12px;
+  color: #a0a0a0;
+}
+
+.api-provider-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Toggle Switch */
+.api-toggle {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 24px;
+}
+
+.api-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.api-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #555;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.api-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+.api-toggle input:checked + .api-toggle-slider {
+  background-color: #3e3e42;
+}
+
+.api-toggle input:checked + .api-toggle-slider:before {
+  transform: translateX(24px);
+}
+
+/* Action Buttons */
+.api-action-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.api-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.api-select-btn {
+  background: #3e3e42;
+  color: #ffffff;
+}
+
+.api-select-btn:hover:not(:disabled) {
+  background: #4a4a4e;
+}
+
+.api-delete-btn {
+  background: transparent;
+  color: #f48771;
+  border: 1px solid #f48771;
+  font-size: 16px;
+  padding: 6px 12px;
+}
+
+.api-delete-btn:hover {
+  background: rgba(244, 135, 113, 0.1);
+}
+
+/* Models List */
+.api-provider-models-list {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #3c3c3c;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.api-model-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: #3c3c3c;
+  color: #cccccc;
+  border-radius: 12px;
+  font-size: 11px;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.api-model-more {
+  background: #464647;
+  color: #a0a0a0;
+}
