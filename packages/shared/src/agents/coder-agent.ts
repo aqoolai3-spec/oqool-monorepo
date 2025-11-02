@@ -23,40 +23,44 @@ export class CoderAgent {
 
   async implement(architecture: Architecture, task: string): Promise<GeneratedCode> {
     const files: CodeFile[] = [];
+    const promises: Promise<CodeFile | null>[] = [];
+
+    // ⚡ توليد متوازي بدل متسلسل - أسرع 5-10x
+    console.log('⚡ Generating code in parallel...');
 
     // 1️⃣ توليد كل component
     if (architecture.components && architecture.components.length > 0) {
       for (const component of architecture.components) {
-        const code = await this.generateComponent(component, architecture);
-        if (code) files.push(code);
+        promises.push(this.generateComponent(component, architecture));
       }
     }
 
     // 2️⃣ توليد API routes
     if (architecture.api && architecture.api.endpoints) {
       for (const endpoint of architecture.api.endpoints) {
-        const code = await this.generateRoute(endpoint, architecture);
-        if (code) files.push(code);
+        promises.push(this.generateRoute(endpoint, architecture));
       }
     }
 
     // 3️⃣ توليد Database models
     if (architecture.database && architecture.database.tables) {
       for (const table of architecture.database.tables) {
-        const code = await this.generateModel(table, architecture);
-        if (code) files.push(code);
+        promises.push(this.generateModel(table, architecture));
       }
     }
 
     // 4️⃣ توليد Frontend components
     if (architecture.frontend && architecture.frontend.components) {
       for (const comp of architecture.frontend.components) {
-        const code = await this.generateFrontendComponent(comp, architecture);
-        if (code) files.push(code);
+        promises.push(this.generateFrontendComponent(comp, architecture));
       }
     }
 
-    // 5️⃣ توليد Config files
+    // انتظر كل الملفات تتولد بالتوازي
+    const results = await Promise.all(promises);
+    files.push(...results.filter(f => f !== null) as CodeFile[]);
+
+    // 5️⃣ توليد Config files (بعد الباقي)
     const configFiles = await this.generateConfigFiles(architecture, task);
     files.push(...configFiles);
 
