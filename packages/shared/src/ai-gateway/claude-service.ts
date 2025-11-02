@@ -38,7 +38,7 @@ export class ClaudeService {
     options: ChatCompletionOptions = {}
   ): Promise<string> {
     const {
-      model = 'claude-3-5-sonnet-20241022',
+      model = 'claude-3-haiku-20240307', // الأرخص: $0.25/$1.25 per 1M tokens
       maxTokens = 4096,
       temperature = 0.7,
       systemPrompt,
@@ -81,7 +81,7 @@ export class ClaudeService {
     options: ChatCompletionOptions = {}
   ): AsyncGenerator<string, void, unknown> {
     const {
-      model = 'claude-3-5-sonnet-20241022',
+      model = 'claude-3-haiku-20240307', // الأرخص: $0.25/$1.25 per 1M tokens
       maxTokens = 4096,
       temperature = 0.7,
       systemPrompt,
@@ -118,9 +118,13 @@ export class ClaudeService {
   /**
    * حساب التكلفة التقريبية
    */
-  calculateCost(inputTokens: number, outputTokens: number, model: string = 'claude-3-5-sonnet-20241022'): number {
+  calculateCost(inputTokens: number, outputTokens: number, model: string = 'claude-3-haiku-20240307'): number {
     // Claude pricing
     const pricing: Record<string, { input: number; output: number }> = {
+      'claude-3-haiku-20240307': {
+        input: 0.25,  // $0.25 per 1M tokens - الأرخص! 💰
+        output: 1.25, // $1.25 per 1M tokens
+      },
       'claude-3-5-sonnet-20241022': {
         input: 3.0,   // $3 per 1M tokens
         output: 15.0, // $15 per 1M tokens
@@ -135,7 +139,7 @@ export class ClaudeService {
       },
     };
 
-    const modelPricing = pricing[model] || pricing['claude-3-5-sonnet-20241022'];
+    const modelPricing = pricing[model] || pricing['claude-3-haiku-20240307'];
     const inputCost = (inputTokens / 1_000_000) * modelPricing.input;
     const outputCost = (outputTokens / 1_000_000) * modelPricing.output;
     
@@ -162,9 +166,16 @@ export class ClaudeService {
   getAvailableModels() {
     return [
       {
+        id: 'claude-3-haiku-20240307',
+        name: 'Claude 3 Haiku',
+        description: '💰 الأرخص والأسرع - موصى به للاختبار',
+        maxTokens: 200000,
+        cost: { input: 0.25, output: 1.25 },
+      },
+      {
         id: 'claude-3-5-sonnet-20241022',
         name: 'Claude 3.5 Sonnet',
-        description: 'الأذكى والأسرع - موصى به',
+        description: 'الأذكى - للمهام المعقدة',
         maxTokens: 200000,
         cost: { input: 3.0, output: 15.0 },
       },
@@ -225,15 +236,15 @@ export class ClaudeService {
   getModelInfo() {
     return {
       name: 'Claude (Anthropic)',
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-3-haiku-20240307',
       maxTokens: 200000,
       costPer1MTokens: {
-        input: 3.0,
-        output: 15.0,
+        input: 0.25,
+        output: 1.25,
       },
-      description: 'أفضل نموذج للمهام المعقدة والبرمجة',
-      strengths: ['ذكاء عالي', 'ممتاز في البرمجة', 'فهم عميق للسياق', 'آمن جداً'],
-      weaknesses: ['غالي نسبياً', 'بطيء قليلاً'],
+      description: '💰 أرخص نموذج Claude - ممتاز للاختبار',
+      strengths: ['رخيص جداً', 'سريع', 'جيد في البرمجة', 'أرخص 12x من Sonnet'],
+      weaknesses: ['أقل ذكاءً من Sonnet/Opus'],
     };
   }
 }

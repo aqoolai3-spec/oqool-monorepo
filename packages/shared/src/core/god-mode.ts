@@ -131,7 +131,7 @@ export class GodMode {
 
   constructor(config: GodModeConfig) {
     this.config = {
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-3-haiku-20240307', // الأرخص: $0.25/$1.25 per 1M tokens
       outputPath: './god-mode-project',
       verbose: true,
       ...config
